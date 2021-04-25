@@ -1,13 +1,19 @@
 use core::panic;
-use std::{io::{BufReader, BufWriter}, sync::mpsc, thread};
+use std::{io::{BufWriter}, marker::PhantomData, sync::mpsc, thread};
 use thiserror::Error;
 
 use std::{io::{self, Read, Write}, net::{TcpListener, TcpStream}};
 
 use super::*;
 
+pub type TcpResponseWriter = ResponseWriter<'static, BufWriter<TcpStream>>;
 
-pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(Request, ResponseWriter<TcpStream>)>, BindError> {
+pub fn serve(bind_address: &str) -> 
+    Result<
+        mpsc::Receiver<(
+            Request, 
+            TcpResponseWriter)>, 
+        BindError> {
 
     let listener = TcpListener::bind(bind_address)?;
     let (tx, rx) = mpsc::channel();
@@ -20,7 +26,7 @@ pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(Request, ResponseWrit
                     eprint!("Unable to clone stream objects for response: {:?}", e);
                     continue;
                 }
-                Ok(s) => ResponseWriter::new(s)
+                Ok(s) => new_response_writer(s)
             };
 
             let request = parse_request(stream);
@@ -62,29 +68,26 @@ enum ResponseState {
     Body,
 }
 
-pub struct ResponseWriter<Stream>
-    where Stream: Write {
-    stream: BufWriter<Stream>,
+pub struct ResponseWriter<'a, Stream> 
+    where Stream: 'a + Write + Send {
+
+    stream: Stream,
     state: ResponseState,
+    _lifetime: PhantomData<&'a Stream>,
 }
 
-impl<Stream> ResponseWriter<Stream>
-    where Stream: Write {
-    fn new(s: Stream) -> Self {
-        ResponseWriter {
-            stream: BufWriter::new(s),
-            state: ResponseState::Status,
-        }
+
+fn new_response_writer<Stream>(s: Stream) -> ResponseWriter<'static, BufWriter<Stream>>
+    where Stream: Write+Send+'static {
+    ResponseWriter {
+        stream: BufWriter::new(s),
+        state: ResponseState::Status,
+        _lifetime: PhantomData,
     }
 }
 
 
-impl<Stream> ResponseWriter<Stream>
-    where Stream: Write {
-
-    pub fn get_raw(self) -> BufWriter<Stream> {
-        self.stream
-    }
+impl<'a, Stream> ResponseWriter<'a, Stream> where Stream: Write+Send {
 
     pub fn set_status(&mut self, status: u16) -> Result<(), io::Error> {
         assert!(self.state == ResponseState::Status, "Invalid state: status code has already been sent; cannot update");
@@ -287,6 +290,17 @@ mod test {
     use super::*;
     use std::io::Cursor;
 
+
+    fn new_response_writer_for_ref<'a, UnderlyingStream>(s: UnderlyingStream) -> ResponseWriter<'a, BufWriter<UnderlyingStream>>
+    where UnderlyingStream: Write+Send+'a {
+
+        ResponseWriter {
+            stream: BufWriter::new( s),
+            state: ResponseState::Status,
+            _lifetime: PhantomData
+        }
+    }
+
     #[test]
     fn parse_empty_get_can_extract_path_and_well_known_headers() {
         let req = Cursor::new(
@@ -308,13 +322,16 @@ mod test {
 
     #[test]
     fn response_writes_out_status_and_headers_for_ok() {
-        let mut output = Cursor::new(Vec::new());
+        let mut bytes = Vec::new();
+        let mut output = Cursor::new(&mut bytes);
+        
         {
-            let response = ResponseWriter::new(&mut output);
+            let response = new_response_writer_for_ref(&mut output);
             let _ = response.send_response(Response::ok()).unwrap();
         }
 
         let result = output.get_ref().as_slice();
+
         assert_eq!(
             result, 
             b"HTTP/1.1 200\r\n\

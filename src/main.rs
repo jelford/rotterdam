@@ -1,7 +1,7 @@
 
 use std::{collections::HashMap, error::Error};
 
-use smtr::{Request, server::{ResponseWriter, Response}};
+use smtr::{Request, server::{TcpResponseWriter, Response}};
 
 
 /*
@@ -24,7 +24,7 @@ struct Repo {
 
 
 
-fn handle_request(req: Request, resp: ResponseWriter, repos: &HashMap<&str, Repo>) -> Result<(), Box<dyn Error>> {
+fn handle_request(req: Request, resp: TcpResponseWriter, repos: &HashMap<&str, Repo>) -> Result<(), Box<dyn Error>> {
 
     let path_parts: Vec<_> = req.path().split("/").collect();
     println!("path_parts: {:?}", path_parts);

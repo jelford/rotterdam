@@ -103,8 +103,8 @@ impl<'a, Stream> ResponseWriter<'a, Stream> where Stream: Write+Send {
             ResponseState::Body => panic!("Invalid state: headers have already been sent; cannot update"),
         };
 
-        for (hname, hvalue) in headers.iter() {
-            write!(self.stream, "{}: {}\r\n", hname.as_header_string(), hvalue)?;
+        for (h_name, h_value) in headers.iter() {
+            write!(self.stream, "{}: {}\r\n", h_name.as_header_string(), h_value)?;
         }
         write!(self.stream, "\r\n")?;
 

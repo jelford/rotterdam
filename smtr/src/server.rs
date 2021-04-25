@@ -1,5 +1,5 @@
 use core::panic;
-use std::{io::{BufWriter}, marker::PhantomData, sync::mpsc, thread};
+use std::{convert::TryFrom, io::{BufWriter}, marker::PhantomData, sync::mpsc, thread};
 use thiserror::Error;
 
 use std::{io::{self, Read, Write}, net::{TcpListener}};
@@ -13,6 +13,8 @@ pub struct Responder {
 impl Responder {
     pub fn set_status(&mut self, status: u16) -> Result<(), io::Error> { self.imp.set_status(status)}
     pub fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> { self.imp.set_headers(headers)}
+    pub fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error> { self.imp.set_header(header, value)}
+    pub fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error> { self.imp.write_body(bytes) }
     pub fn stream_body(mut self, reader: &mut dyn Read) -> Result<(), io::Error> { self.imp.stream_body(reader)}
     pub fn send_response(mut self, response: Response) -> Result<(), io::Error> { self.imp.send_response(response)}
 }
@@ -23,7 +25,8 @@ pub fn serve(bind_address: &str) ->
             Request, 
             Responder)>, 
         BindError> {
-
+    
+    let base_url = Url::parse(&format!("http://{}", bind_address)).map_err(BindError::InvalidBindAddress)?;
     let listener = TcpListener::bind(bind_address)?;
     let (tx, rx) = mpsc::channel();
 
@@ -38,7 +41,7 @@ pub fn serve(bind_address: &str) ->
                 Ok(s) => Responder { imp: Box::new(new_response_writer(s)) }
             };
 
-            let request = parse_request(stream);
+            let request = parse_request(&base_url, stream);
             
 
             match request {
@@ -57,6 +60,8 @@ pub fn serve(bind_address: &str) ->
 pub enum BindError{
     #[error("Unable to listen on http port")]
     HttpListenError(#[from] io::Error),
+    #[error("Bind address cannot be base for http url")]
+    InvalidBindAddress(#[from] url::ParseError),
 }
 
 #[derive(Debug, Error)]
@@ -71,7 +76,9 @@ pub enum HttpError {
 }
 trait ResponseWriter {
     fn set_status(&mut self, status: u16) -> Result<(), io::Error>;
+    fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error>;
     fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error>;
+    fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error>;
     fn stream_body(&mut self, reader: &mut dyn Read) -> Result<(), io::Error>;
     fn send_response(&mut self, response: Response) -> Result<(), io::Error>;
 }
@@ -112,6 +119,17 @@ impl<'a, Stream> ResponseWriter for ResponseWriterImpl<'a, Stream> where Stream:
         Ok(())
     }
 
+    fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error> {
+        match self.state {
+            ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start headers"),
+            ResponseState::Headers => {},
+            ResponseState::Body => panic!("Invalid state: headers have already been sent; cannot update"),
+        };
+
+        write!(self.stream, "{}: {}\r\n", header.as_header_string(), value)?;
+        Ok(())
+    }
+
     fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> {
         match self.state {
             ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start headers"),
@@ -129,12 +147,23 @@ impl<'a, Stream> ResponseWriter for ResponseWriterImpl<'a, Stream> where Stream:
         Ok(())
     }
 
+    fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error> { 
+        match self.state {
+            ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start body"),
+            ResponseState::Headers => write!(self.stream, "\r\n")?,
+            ResponseState::Body => {},
+        };
+        self.state = ResponseState::Body;
+        self.stream.write_all(bytes)
+    }
+
     fn stream_body(&mut self, mut reader: &mut dyn Read) -> Result<(), io::Error> {
         match self.state {
             ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start body"),
             ResponseState::Headers => write!(self.stream, "\r\n")?,
             ResponseState::Body => (),
         }
+        self.state = ResponseState::Body;
         std::io::copy(&mut reader, &mut self.stream)?;
         Ok(())
     }
@@ -203,7 +232,7 @@ impl ResponseBuilder {
 }
 
 
-fn parse_request<R>(mut stream: R) -> Result<Request, HttpError> 
+fn parse_request<R>(base_url: &Url, mut stream: R) -> Result<Request, HttpError> 
     where R: Read {
     
     let mut buf = [0u8; 1000];
@@ -292,9 +321,11 @@ fn parse_request<R>(mut stream: R) -> Result<Request, HttpError>
         }
     }
 
+    let url = base_url.join(&path).map_err(|_| HttpError::ClientError(400, "Invalid path".to_string()))?;
+
     Ok(Request {
         method,
-        path,
+        url,
         headers
     })
 }
@@ -306,7 +337,6 @@ mod test {
     use super::*;
     use std::io::Cursor;
 
-
     fn new_response_writer_for_ref<'a, UnderlyingStream>(s: UnderlyingStream) -> ResponseWriterImpl<'a, BufWriter<UnderlyingStream>>
     where UnderlyingStream: Write+Send+'a {
 
@@ -315,6 +345,10 @@ mod test {
             state: ResponseState::Status,
             _lifetime: PhantomData
         }
+    }
+
+    fn base_url() -> Url {
+        Url::parse("http://localhost:2000").unwrap()
     }
 
     #[test]
@@ -327,7 +361,7 @@ mod test {
             \r\n");
 
 
-        let result = parse_request(req);
+        let result = parse_request(&base_url(), req);
         
         let result = result.unwrap();
 

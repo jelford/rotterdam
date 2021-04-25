@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub mod server;
 
@@ -32,18 +33,33 @@ pub enum Header {
     Authorization,
 }
 
+impl Header {
+    pub fn as_header_string(&self) -> &'static str {
+        match self {
+            Header::ContentType => "Content-Type",
+            Header::ContentLength => "Content-Length",
+            _ => {panic!("didn't expect to have to render {:?}", self);}
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Headers {
     data: HashMap<Header, String>,
 }
 
 impl Headers {
-    pub fn set(&mut self, key: Header, value: String) {
-        self.data.insert(key, value);
+    pub fn set<V>(&mut self, key: Header, value: V)
+        where V : Into<String> {
+        self.data.insert(key, value.into());
     }
 
     pub fn get(&self, key: Header) -> Option<&String> {
         self.data.get(&key)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=(&Header, &String)> {
+        self.data.iter()
     }
 }
 
@@ -51,7 +67,7 @@ impl Headers {
 pub struct Request {
     method: Method,
     headers: Headers,
-    path: String,
+    path: Arc<String>,
 }
 
 impl Request {

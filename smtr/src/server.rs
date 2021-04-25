@@ -2,17 +2,26 @@ use core::panic;
 use std::{io::{BufWriter}, marker::PhantomData, sync::mpsc, thread};
 use thiserror::Error;
 
-use std::{io::{self, Read, Write}, net::{TcpListener, TcpStream}};
+use std::{io::{self, Read, Write}, net::{TcpListener}};
 
 use super::*;
 
-pub type TcpResponseWriter = ResponseWriter<'static, BufWriter<TcpStream>>;
+pub struct Responder {
+    imp: Box<dyn ResponseWriter+Send>,
+}
+
+impl Responder {
+    pub fn set_status(&mut self, status: u16) -> Result<(), io::Error> { self.imp.set_status(status)}
+    pub fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> { self.imp.set_headers(headers)}
+    pub fn stream_body(mut self, reader: &mut dyn Read) -> Result<(), io::Error> { self.imp.stream_body(reader)}
+    pub fn send_response(mut self, response: Response) -> Result<(), io::Error> { self.imp.send_response(response)}
+}
 
 pub fn serve(bind_address: &str) -> 
     Result<
         mpsc::Receiver<(
             Request, 
-            TcpResponseWriter)>, 
+            Responder)>, 
         BindError> {
 
     let listener = TcpListener::bind(bind_address)?;
@@ -26,7 +35,7 @@ pub fn serve(bind_address: &str) ->
                     eprint!("Unable to clone stream objects for response: {:?}", e);
                     continue;
                 }
-                Ok(s) => new_response_writer(s)
+                Ok(s) => Responder { imp: Box::new(new_response_writer(s)) }
             };
 
             let request = parse_request(stream);
@@ -60,6 +69,13 @@ pub enum HttpError {
     ClientError(u16, String),
 
 }
+trait ResponseWriter {
+    fn set_status(&mut self, status: u16) -> Result<(), io::Error>;
+    fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error>;
+    fn stream_body(&mut self, reader: &mut dyn Read) -> Result<(), io::Error>;
+    fn send_response(&mut self, response: Response) -> Result<(), io::Error>;
+}
+
 
 #[derive(Debug, PartialEq, Eq)]
 enum ResponseState {
@@ -68,7 +84,7 @@ enum ResponseState {
     Body,
 }
 
-pub struct ResponseWriter<'a, Stream> 
+struct ResponseWriterImpl<'a, Stream> 
     where Stream: 'a + Write + Send {
 
     stream: Stream,
@@ -77,9 +93,9 @@ pub struct ResponseWriter<'a, Stream>
 }
 
 
-fn new_response_writer<Stream>(s: Stream) -> ResponseWriter<'static, BufWriter<Stream>>
+fn new_response_writer<Stream>(s: Stream) -> ResponseWriterImpl<'static, BufWriter<Stream>>
     where Stream: Write+Send+'static {
-    ResponseWriter {
+    ResponseWriterImpl {
         stream: BufWriter::new(s),
         state: ResponseState::Status,
         _lifetime: PhantomData,
@@ -87,16 +103,16 @@ fn new_response_writer<Stream>(s: Stream) -> ResponseWriter<'static, BufWriter<S
 }
 
 
-impl<'a, Stream> ResponseWriter<'a, Stream> where Stream: Write+Send {
+impl<'a, Stream> ResponseWriter for ResponseWriterImpl<'a, Stream> where Stream: Write+Send {
 
-    pub fn set_status(&mut self, status: u16) -> Result<(), io::Error> {
+    fn set_status(&mut self, status: u16) -> Result<(), io::Error> {
         assert!(self.state == ResponseState::Status, "Invalid state: status code has already been sent; cannot update");
         write!(self.stream, "HTTP/1.1 {}\r\n", status)?;
         self.state = ResponseState::Headers;
         Ok(())
     }
 
-    pub fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> {
+    fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> {
         match self.state {
             ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start headers"),
             ResponseState::Headers => {},
@@ -113,7 +129,7 @@ impl<'a, Stream> ResponseWriter<'a, Stream> where Stream: Write+Send {
         Ok(())
     }
 
-    pub fn stream_body(mut self, mut reader: &mut dyn Read) -> Result<(), io::Error> {
+    fn stream_body(&mut self, mut reader: &mut dyn Read) -> Result<(), io::Error> {
         match self.state {
             ResponseState::Status => panic!("Invalid state: status code has not yet been sent; cannot start body"),
             ResponseState::Headers => write!(self.stream, "\r\n")?,
@@ -123,7 +139,7 @@ impl<'a, Stream> ResponseWriter<'a, Stream> where Stream: Write+Send {
         Ok(())
     }
 
-    pub fn send_response(mut self, response: Response) -> Result<(), io::Error> {
+    fn send_response(&mut self, response: Response) -> Result<(), io::Error> {
         assert!(self.state == ResponseState::Status, "Invalid state: response has already started");
 
         self.set_status(response.status)?;
@@ -291,10 +307,10 @@ mod test {
     use std::io::Cursor;
 
 
-    fn new_response_writer_for_ref<'a, UnderlyingStream>(s: UnderlyingStream) -> ResponseWriter<'a, BufWriter<UnderlyingStream>>
+    fn new_response_writer_for_ref<'a, UnderlyingStream>(s: UnderlyingStream) -> ResponseWriterImpl<'a, BufWriter<UnderlyingStream>>
     where UnderlyingStream: Write+Send+'a {
 
-        ResponseWriter {
+        ResponseWriterImpl {
             stream: BufWriter::new( s),
             state: ResponseState::Status,
             _lifetime: PhantomData
@@ -326,7 +342,7 @@ mod test {
         let mut output = Cursor::new(&mut bytes);
         
         {
-            let response = new_response_writer_for_ref(&mut output);
+            let mut response = new_response_writer_for_ref(&mut output);
             let _ = response.send_response(Response::ok()).unwrap();
         }
 

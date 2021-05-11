@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      RUSTC_WRAPPER: ~/.local/bin
-      SCCACHE_DIR: ~/.cache/sccache
+      RUSTC_WRAPPER: /home/runner/.local/bin
+      SCCACHE_DIR: /home/runner/.cache/sccache
 
     steps:
     - uses: actions/checkout@v2

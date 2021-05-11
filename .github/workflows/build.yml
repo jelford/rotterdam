@@ -32,10 +32,14 @@ jobs:
           ${{ runner.os }}-build-${{ env.cache-name }}-
           
     - name: Build
-      run: cargo build --all --verbose
+      run: cargo build --examples --all --verbose
       
-    - name: Run tests
+    - name: Run tests - cargo
       run: cargo test --all --verbose
+
+    - name: Run tests - verify echo server
+      working-directory: smtr
+      run: "python test-cases/verify.py"
       
   lint: 
     runs-on: ubuntu-latest

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      RUSTC_WRAPPER: /home/runner/.local/bin
+      RUSTC_WRAPPER: /home/runner/.local/bin/sccache
       SCCACHE_DIR: /home/runner/.cache/sccache
 
     steps:

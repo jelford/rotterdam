@@ -11,8 +11,11 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
+
+    env:
+      RUSTC_WRAPPER: ~/.local/bin
+      SCCACHE_DIR: ~/.cache/sccache
 
     steps:
     - uses: actions/checkout@v2
@@ -20,16 +23,30 @@ jobs:
     - name: Cache Cargo Artifacts
       uses: actions/cache@v2
       env:
-        cache-name: cache-cargo-artifacts
+        cache-name: cache-cargo-artifacts-3
       with:
         path: |
           ~/.cargo/git
           ~/.cargo/registry/index
           ~/.cargo/registry/cache
           ./target
+          ~/.cache/sccache
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
+
+    - name: Install sccache
+      shell: bash
+      run: |
+        mkdir -p ~/.local/bin
+        echo ~/.local/bin >> $GITHUB_PATH
+        d=$(mktemp -d)
+        cd ${d}
+        curl -o sccache.tar.gz -sSL "https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz"
+        tar -xzf sccache.tar.gz
+        cp "${d}/sccache-v0.2.15-x86_64-unknown-linux-musl/sccache" ~/.local/bin
+
+
           
     - name: Build
       run: cargo build --examples --all --verbose

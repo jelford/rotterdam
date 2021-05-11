@@ -4,7 +4,6 @@ use std::{
     io::{stdout, Write},
     os::unix::prelude::AsRawFd,
     path::PathBuf,
-    str::FromStr,
 };
 
 use anyhow::Result;
@@ -32,17 +31,17 @@ struct Repo {
 }
 
 impl Repo {
-    fn git_path(&self) -> PathBuf {
-        PathBuf::from("rotterdam-data")
-            .join(&self.name)
-            .join("index")
-            .join(".git")
-    }
+    // fn git_path(&self) -> PathBuf {
+    //     PathBuf::from("rotterdam-data")
+    //         .join(&self.name)
+    //         .join("index")
+    //         .join(".git")
+    // }
 }
 
 struct App {
-    git_storage_path: PathBuf,
-    configured_repos: HashMap<&'static str, Repo>,
+    // git_storage_path: PathBuf,
+    // configured_repos: HashMap<&'static str, Repo>,
 }
 
 impl App {
@@ -158,8 +157,8 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let app = App {
-        git_storage_path: PathBuf::from_str("rotterdam-data/git").expect("git storage path"),
-        configured_repos: configured_repos,
+        // git_storage_path: PathBuf::from_str("rotterdam-data/git").expect("git storage path"),
+        // configured_repos: configured_repos,
     };
 
     let chan = smtr::server::serve("127.0.0.1:8080")?;

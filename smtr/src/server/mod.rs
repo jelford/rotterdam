@@ -164,7 +164,6 @@ pub struct ResponseWriter<'a, Stream>
 where
     Stream: 'a + Write + Send,
 {
-    requested_protocol_version: HttpProtocolVersion,
     stream: Stream,
     state: ResponseState,
     _lifetime: PhantomData<&'a Stream>,
@@ -176,7 +175,6 @@ where
     Stream: Write + Send + 'a,
 {
     ResponseWriter {
-        requested_protocol_version: HttpProtocolVersion::H1_0,
         stream: BufWriter::new(s),
         state: ResponseState::Status,
         _lifetime: PhantomData,
@@ -561,7 +559,6 @@ mod test {
         UnderlyingStream: Write + Send + 'a,
     {
         ResponseWriter {
-            requested_protocol_version: HttpProtocolVersion::H1_0,
             stream: BufWriter::new(s),
             state: ResponseState::Status,
             _lifetime: PhantomData,

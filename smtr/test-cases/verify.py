@@ -79,6 +79,7 @@ def run():
                 print(json.dumps(expected, indent=4), file=sys.stderr)
                 print("\nGot:", file=sys.stderr)
                 print(json.dumps(actual, indent=4), file=sys.stderr)
+                fail = True
         
     sys.exit(fail)
         

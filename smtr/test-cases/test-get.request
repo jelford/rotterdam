@@ -1,4 +1,4 @@
-curl -sS localhost:8508
+curl -sS localhost:8508 -A "fixed-user-agent"
 {
   "args": [],
   "headers": [
@@ -12,7 +12,7 @@ curl -sS localhost:8508
     },
     {
       "name": "User-Agent",
-      "value": "curl/7.76.1"
+      "value": "fixed-user-agent"
     }
   ],
   "method": "GET",

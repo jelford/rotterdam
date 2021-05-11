@@ -1,4 +1,4 @@
-curl -sS localhost:8508 -H "X-Header: some-header" -H "Accept: application/json"
+curl -sS localhost:8508 -H "X-Header: some-header" -H "Accept: application/json" -A "fixed-user-agent"
 {
   "args": [],
   "headers": [
@@ -12,7 +12,7 @@ curl -sS localhost:8508 -H "X-Header: some-header" -H "Accept: application/json"
     },
     {
       "name": "User-Agent",
-      "value": "curl/7.76.1"
+      "value": "fixed-user-agent"
     },
     {
       "name": "X-Header",

@@ -2,7 +2,8 @@ use json::object;
 use json::JsonValue;
 
 use smtr::{
-    server::{serve, Response},
+    Request,
+    server::{serve, Response, ResponseWriter},
     Method,
 };
 
@@ -10,7 +11,7 @@ fn main() {
     pretty_env_logger::init_timed();
     let requests = serve("127.0.0.1:8508").unwrap();
     println!("Listening on port 8508");
-    for (mut req, resp) in requests {
+    for (mut req, mut resp) in requests {
         let mut result = JsonValue::new_object();
         result["path"] = JsonValue::String(req.path().to_string());
         result["method"] = JsonValue::String(req.method().as_str().to_string());
@@ -35,7 +36,7 @@ fn main() {
         match req.method() {
             Method::POST | Method::PUT => {
                 result["body"] = req
-                    .body().unwrap()
+                    .read_body().unwrap()
                     .map(|b| JsonValue::String(base64::encode_config(b, base64::URL_SAFE)))
                     .unwrap_or(JsonValue::Null);
             }

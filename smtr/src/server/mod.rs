@@ -1,5 +1,5 @@
 use core::panic;
-use std::{convert::TryInto, fs::read, io::{BufWriter, BufRead, BufReader, Cursor}, marker::PhantomData, sync::mpsc, thread, time::Duration};
+use std::{io::{BufWriter, BufRead, BufReader, Cursor}, marker::PhantomData, net::{TcpStream}, sync::mpsc, thread, time::Duration};
 use thiserror::Error;
 
 use std::{
@@ -9,35 +9,14 @@ use std::{
 
 use super::*;
 
-pub struct Responder {
-    imp: Box<dyn ResponseWriter + Send>,
-}
+pub type TcpResponseWriter = ResponseWriter<'static, BufWriter<TcpStream>>;
 
-impl Responder {
-    pub fn set_status(&mut self, status: u16) -> Result<(), io::Error> {
-        self.imp.set_status(status)
-    }
-    pub fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error> {
-        self.imp.set_headers(headers)
-    }
-    pub fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error> {
-        self.imp.set_header(header, value)
-    }
-    pub fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error> {
-        self.imp.write_body(bytes)
-    }
-    pub fn stream_body(mut self, reader: &mut dyn Read) -> Result<(), io::Error> {
-        self.imp.stream_body(reader)
-    }
-    pub fn send_response(mut self, response: Response) -> Result<(), io::Error> {
-        self.imp.send_response(response)
-    }
-}
-
-pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(Request, Responder)>, BindError> {
+pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(impl Request, TcpResponseWriter)>, BindError> {
+    
     let base_url =
-        Url::parse(&format!("http://{}", bind_address)).map_err(BindError::InvalidBindAddress)?;
-    let listener = TcpListener::bind(bind_address)?;
+        Url::parse(&format!("http://{}", bind_address)).map_err(|e| BindError::InvalidBindUrl(e))?;
+    let listener = TcpListener::bind(bind_address.to_string()).map_err(|e| BindError::InvalidBindAddress(e))?;
+
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
@@ -50,14 +29,12 @@ pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(Request, Responder)>,
                     log::error!("Unable to clone stream objects for response: {:?}", e);
                     continue;
                 }
-                Ok(s) => Responder {
-                    imp: Box::new(new_response_writer_1_0(s)),
-                },
+                Ok(s) => new_response_writer_1_0(s),
             };
 
             let request = parse_request(&base_url, stream);
 
-            let handle_error = |responder: Responder, code: u16| {
+            let handle_error = |mut responder: ResponseWriter<_>, code: u16| {
                 let _ = responder.send_response(Response::err(code));
             };
 
@@ -87,9 +64,11 @@ pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(Request, Responder)>,
 #[derive(Debug, Error)]
 pub enum BindError {
     #[error("Unable to listen on http port")]
-    HttpListenError(#[from] io::Error),
+    HttpListenError(#[source] io::Error),
     #[error("Bind address cannot be base for http url")]
-    InvalidBindAddress(#[from] url::ParseError),
+    InvalidBindUrl(#[from] url::ParseError),
+    #[error("Bind address cannot be base for http url")]
+    InvalidBindAddress(#[source] io::Error),
 }
 
 #[derive(Debug, Error)]
@@ -101,13 +80,67 @@ pub enum HttpError {
     #[error("Bad client request: {0} ({1})")]
     ClientError(u16, &'static str),
 }
-trait ResponseWriter {
-    fn set_status(&mut self, status: u16) -> Result<(), io::Error>;
-    fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error>;
-    fn set_headers(&mut self, headers: Headers) -> Result<(), io::Error>;
-    fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error>;
-    fn stream_body(&mut self, reader: &mut dyn Read) -> Result<(), io::Error>;
-    fn send_response(&mut self, response: Response) -> Result<(), io::Error>;
+
+
+
+struct ReceivedRequest {
+    method: Method,
+    headers: Headers,
+    url: Url,
+    body: Option<Box<dyn BufRead+Send>>,
+}
+
+impl Drop for ReceivedRequest {
+    fn drop(&mut self) {
+        // Consume whatever's left of our body before letting the connection drop
+        if let Some(mut body) = self.body.take() {
+            let mut buf = [0u8; 1024];
+            while let Ok(left) = body.read(&mut buf) {
+                if left == 0 {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+impl Request for ReceivedRequest {
+    fn method(&self) -> Method {
+        self.method
+    }
+
+    fn path(&self) -> &str {
+        &self.url.path()
+    }
+
+    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)> {
+        let mut pairs = Vec::new();
+        let mut i = 0;
+        for p in self.url.query_pairs() {
+            pairs.push((p.0.clone(), p.1.clone()));
+            i += 1;
+            println!("{}", i);
+        }
+        pairs
+    }
+
+    fn headers(&self) -> &Headers {
+        &self.headers
+    }
+
+    fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error> {
+        if let Some(mut b) = self.body.take() {
+            let mut buff = Vec::new();
+            b.read_to_end(&mut buff)?;
+            Ok(Some(buff))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn take_body(&mut self) -> Option<Box<dyn BufRead + Send>> {
+        self.body.take()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -117,7 +150,7 @@ enum ResponseState {
     Body,
 }
 
-struct ResponseWriterImpl<'a, Stream>
+pub struct ResponseWriter<'a, Stream>
 where
     Stream: 'a + Write + Send,
 {
@@ -128,11 +161,11 @@ where
     status: Option<u16>,
 }
 
-fn new_response_writer_1_0<Stream>(s: Stream) -> ResponseWriterImpl<'static, BufWriter<Stream>>
+fn new_response_writer_1_0<'a, Stream>(s: Stream) -> ResponseWriter<'a, BufWriter<Stream>>
 where
-    Stream: Write + Send + 'static,
+    Stream: Write + Send + 'a,
 {
-    ResponseWriterImpl {
+    ResponseWriter {
         requested_protocol_version: HttpProtocolVersion::H1_0,
         stream: BufWriter::new(s),
         state: ResponseState::Status,
@@ -141,13 +174,13 @@ where
     }
 }
 
-impl<'a, Stream> Drop for ResponseWriterImpl<'a, Stream> where Stream: 'a + Write + Send {
+impl<'a, Stream> Drop for ResponseWriter<'a, Stream> where Stream: 'a + Write + Send {
     fn drop(&mut self) {
         log::debug!("{}", self.status.unwrap_or(0));
     }
 }
 
-impl<'a, Stream> ResponseWriter for ResponseWriterImpl<'a, Stream>
+impl<'a, Stream> ResponseWriter<'a, Stream>
 where
     Stream: Write + Send,
 {
@@ -160,22 +193,6 @@ where
         write!(self.stream, "HTTP/1.0 {}\r\n", status)?;
         self.state = ResponseState::Headers;
         self.status = Some(status);
-        Ok(())
-    }
-
-    fn set_header(&mut self, header: Header, value: &str) -> Result<(), io::Error> {
-        match self.state {
-            ResponseState::Status => {
-                panic!("Invalid state: status code has not yet been sent; cannot start headers")
-            }
-            ResponseState::Headers => {}
-            ResponseState::Body => {
-                panic!("Invalid state: headers have already been sent; cannot update")
-            }
-        };
-
-        self.stream.write_all(&header.as_header_string())?;
-        write!(self.stream, ": {}\r\n", value)?;
         Ok(())
     }
 
@@ -204,23 +221,6 @@ where
         Ok(())
     }
 
-    fn write_body(&mut self, bytes: &[u8]) -> Result<(), io::Error> {
-        match self.state {
-            ResponseState::Status => {
-                log::error!("Bad state situation");
-                panic!("Invalid state: status code has not yet been sent; cannot start body")
-            }
-            ResponseState::Headers => { 
-                log::debug!("Implicitly finishing headers"); 
-                write!(self.stream, "\r\n")?; },
-            ResponseState::Body => {}
-
-        };
-        log::trace!("Writing {} bytes to body", bytes.len());
-        self.state = ResponseState::Body;
-        self.stream.write_all(bytes)
-    }
-
     fn stream_body(&mut self, mut reader: &mut dyn Read) -> Result<(), io::Error> {
         match self.state {
             ResponseState::Status => {
@@ -237,7 +237,7 @@ where
         Ok(())
     }
 
-    fn send_response(&mut self, response: Response) -> Result<(), io::Error> {
+    pub fn send_response(&mut self, response: Response) -> Result<(), io::Error> {
         assert!(
             self.state == ResponseState::Status,
             "Invalid state: response has already started"
@@ -357,7 +357,7 @@ fn read_until_limited<R>(reader: &mut BufReader<R>, needle: u8, line_len_limit: 
     }
 }
 
-fn parse_request<R>(base_url: &Url, mut stream: R) -> Result<Request, HttpError>
+fn parse_request<R>(base_url: &Url, mut stream: R) -> Result<ReceivedRequest, HttpError>
 where
     R: Read + Send + 'static,
 {
@@ -478,7 +478,7 @@ where
         .join(&path)
         .map_err(|_| HttpError::ClientError(400, "Invalid path"))?;
 
-    Ok(Request {
+    Ok(ReceivedRequest {
         method,
         url,
         headers,
@@ -493,11 +493,11 @@ mod test {
 
     fn new_response_writer_for_ref<'a, UnderlyingStream>(
         s: UnderlyingStream,
-    ) -> ResponseWriterImpl<'a, BufWriter<UnderlyingStream>>
+    ) -> ResponseWriter<'a, BufWriter<UnderlyingStream>>
     where
         UnderlyingStream: Write + Send + 'a,
     {
-        ResponseWriterImpl {
+        ResponseWriter {
             requested_protocol_version: HttpProtocolVersion::H1_0,
             stream: BufWriter::new(s),
             state: ResponseState::Status,
@@ -547,9 +547,9 @@ mod test {
             Hello world",
         );
 
-        let result = parse_request(&base_url(), req).unwrap();
+        let mut result = parse_request(&base_url(), req).unwrap();
 
-        let mut body = result.body.unwrap();
+        let mut body = result.take_body().unwrap();
         let mut result = Vec::new();
         body.read_to_end(&mut result).unwrap();
         

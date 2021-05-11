@@ -97,45 +97,11 @@ impl Headers {
     }
 }
 
-
-pub struct Request {
-    method: Method,
-    headers: Headers,
-    url: Url,
-    body: Option<Box<dyn BufRead+Send>>,
-}
-
-impl Request {
-    pub fn method(&self) -> Method {
-        self.method
-    }
-
-    pub fn path(&self) -> &str {
-        &self.url.path()
-    }
-
-    pub fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)> {
-        let mut pairs = Vec::new();
-        let mut i = 0;
-        for p in self.url.query_pairs() {
-            pairs.push((p.0.clone(), p.1.clone()));
-            i += 1;
-            println!("{}", i);
-        }
-        pairs
-    }
-
-    pub fn headers(&self) -> &Headers {
-        &self.headers
-    }
-
-    pub fn body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error> {
-        if let Some(mut b) = self.body.take() {
-            let mut buff = Vec::new();
-            b.read_to_end(&mut buff)?;
-            Ok(Some(buff))
-        } else {
-            Ok(None)
-        }
-    }
+pub trait Request {
+    fn method(&self) -> Method;
+    fn path(&self) -> &str;
+    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)>; 
+    fn headers(&self) -> &Headers; 
+    fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error>; 
+    fn take_body(&mut self) -> Option<Box<dyn BufRead+Send>>;
 }

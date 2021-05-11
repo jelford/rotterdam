@@ -96,12 +96,16 @@ impl Headers {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }
 
 pub trait Request {
     fn method(&self) -> Method;
     fn path(&self) -> &str;
-    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)>;
+    fn query_pairs(&self) -> Vec<(Cow<str>, Cow<str>)>;
     fn headers(&self) -> &Headers;
     fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error>;
     fn take_body(&mut self) -> Option<Box<dyn BufRead + Send>>;

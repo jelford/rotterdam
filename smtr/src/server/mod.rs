@@ -123,7 +123,7 @@ impl Request for ReceivedRequest {
         &self.url.path()
     }
 
-    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)> {
+    fn query_pairs(&self) -> Vec<(Cow<str>, Cow<str>)> {
         let mut pairs = Vec::new();
         let mut i = 0;
         for p in self.url.query_pairs() {
@@ -331,7 +331,7 @@ impl ResponseBuilder {
     }
 
     pub fn body(mut self, b: Vec<u8>) -> Self {
-        if let None = self.headers.get(Header::ContentLength) {
+        if self.headers.get(Header::ContentLength).is_none() {
             self.headers.set(
                 Header::ContentLength,
                 b.len().to_string().as_bytes().to_vec(),

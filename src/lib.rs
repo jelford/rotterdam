@@ -49,7 +49,7 @@ impl App {
         let path_parts: Vec<_> = req.path().split('/').collect();
 
         match (req.method(), path_parts.as_slice()) {
-            (Method::POST, ["", "api", "v1", "token"]) => self.handle_token_create(req, resp),
+            (Method::Post, ["", "api", "v1", "token"]) => self.handle_token_create(req, resp),
             (_, ["", "repo", "index"]) => self.handle_git_request(req, resp),
             (_method, ["", "repo", repo_name, "index", rest @ ..]) => {
                 let _headers = req.headers().clone();

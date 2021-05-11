@@ -14,21 +14,21 @@ pub enum HttpProtocolVersion {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Method {
-    GET,
-    PUT,
-    DELETE,
-    POST,
-    OPTION,
+    Get,
+    Put,
+    Delete,
+    Post,
+    Option,
 }
 
 impl Method {
     pub fn as_str(&self) -> &str {
         match self {
-            Method::GET => "GET",
-            Method::PUT => "PUT",
-            Method::DELETE => "DELETE",
-            Method::POST => "POST",
-            Method::OPTION => "OPTION",
+            Method::Get => "GET",
+            Method::Put => "PUT",
+            Method::Delete => "DELETE",
+            Method::Post => "POST",
+            Method::Option => "OPTION",
         }
     }
 }

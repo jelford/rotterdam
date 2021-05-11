@@ -33,7 +33,7 @@ fn main() {
         );
 
         match req.method() {
-            Method::POST | Method::PUT => {
+            Method::Post | Method::Put => {
                 result["body"] = req
                     .read_body()
                     .unwrap()

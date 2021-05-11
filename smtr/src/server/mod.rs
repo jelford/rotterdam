@@ -396,11 +396,11 @@ where
         let buf = stream.fill_buf()?;
 
         match &buf[0..3] {
-            b"GET" => (Method::GET, 4),
-            b"PUT" => (Method::PUT, 4),
-            b"POS" => (Method::POST, 5),
-            b"DEL" => (Method::DELETE, 7),
-            b"OPT" => (Method::OPTION, 7),
+            b"GET" => (Method::Get, 4),
+            b"PUT" => (Method::Put, 4),
+            b"POS" => (Method::Post, 5),
+            b"DEL" => (Method::Delete, 7),
+            b"OPT" => (Method::Option, 7),
             _ => return Err(HttpError::ServerError("Unable to parse method".into())),
         }
     };

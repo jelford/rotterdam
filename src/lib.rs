@@ -12,7 +12,7 @@ use smtr::{
     Method, Request,
 };
 
-use clap;
+
 
 /*
 /api/v1/
@@ -46,7 +46,7 @@ struct App {
 
 impl App {
     fn handle(&self, req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
-        let path_parts: Vec<_> = req.path().split("/").collect();
+        let path_parts: Vec<_> = req.path().split('/').collect();
 
         match (req.method(), path_parts.as_slice()) {
             (Method::POST, ["", "api", "v1", "token"]) => self.handle_token_create(req, resp),
@@ -58,7 +58,7 @@ impl App {
                     path.push(r);
                 }
 
-                return self.handle_git_request(req, resp);
+                self.handle_git_request(req, resp)
             }
             _ => {
                 resp.send_response(Response::err(404))?;

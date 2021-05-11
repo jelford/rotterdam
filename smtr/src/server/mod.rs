@@ -22,9 +22,9 @@ pub fn serve(
     bind_address: &str,
 ) -> Result<mpsc::Receiver<(impl Request, TcpResponseWriter)>, BindError> {
     let base_url = Url::parse(&format!("http://{}", bind_address))
-        .map_err(|e| BindError::InvalidBindUrl(e))?;
+        .map_err(BindError::InvalidBindUrl)?;
     let listener = TcpListener::bind(bind_address.to_string())
-        .map_err(|e| BindError::InvalidBindAddress(e))?;
+        .map_err(BindError::InvalidBindAddress)?;
 
     let (tx, rx) = mpsc::channel();
 
@@ -382,7 +382,7 @@ where
     if found {
         Ok(buf)
     } else {
-        Err(HttpError::ClientError(400, "Header line too long".into()))
+        Err(HttpError::ClientError(400, "Header line too long"))
     }
 }
 
@@ -401,7 +401,7 @@ where
             b"POS" => (Method::POST, 5),
             b"DEL" => (Method::DELETE, 7),
             b"OPT" => (Method::OPTION, 7),
-            _ => Err(HttpError::ServerError("Unable to parse method".into()))?,
+            _ => return Err(HttpError::ServerError("Unable to parse method".into())),
         }
     };
     stream.consume(offset);
@@ -415,7 +415,7 @@ where
             .position(|&b| b == b' ')
             .ok_or(HttpError::ClientError(
                 400,
-                "Not enough data in first line - no path".into(),
+                "Not enough data in first line - no path",
             ))?;
 
         (
@@ -432,7 +432,7 @@ where
                 .position(|b| b.is_ascii_whitespace())
                 .ok_or(HttpError::ClientError(
                     400,
-                    "Http version not specified".into(),
+                    "Http version not specified",
                 ))?;
 
         let http_ver = match &rest[..sp_idx] {
@@ -441,7 +441,7 @@ where
             _ => {
                 return Err(HttpError::ClientError(
                     400,
-                    "Unrecognized HTTP version".into(),
+                    "Unrecognized HTTP version",
                 ))
             }
         };
@@ -468,7 +468,7 @@ where
         }
 
         let line = read_until_limited(&mut stream, b'\n', 1000)?;
-        if line.len() == 0 || line.iter().all(|b| b.is_ascii_whitespace()) {
+        if line.is_empty() || line.iter().all(|b| b.is_ascii_whitespace()) {
             break;
         }
 
@@ -486,13 +486,13 @@ where
             let mut value = parts
                 .next()
                 .ok_or(HttpError::ClientError(400, "Bad header value"))?;
-            while value.len() > 0 && value[0].is_ascii_whitespace() {
+            while !value.is_empty() && value[0].is_ascii_whitespace() {
                 value = &value[1..];
             }
-            while value.len() > 0 && value[value.len() - 1].is_ascii_whitespace() {
+            while !value.is_empty() && value[value.len() - 1].is_ascii_whitespace() {
                 value = &value[..value.len() - 1];
             }
-            if value.len() == 0 {
+            if value.is_empty() {
                 return Err(HttpError::ClientError(400, "Empty header value"));
             }
             (key, value)
@@ -531,7 +531,7 @@ where
         }
     };
 
-    if let Some(_) = body.as_ref() {
+    if body.as_ref().is_some() {
         log::trace!("Got body");
     }
 
@@ -539,12 +539,7 @@ where
         .join(&path)
         .map_err(|_| HttpError::ClientError(400, "Invalid path"))?;
 
-    Ok(ReceivedRequest {
-        method,
-        url,
-        headers,
-        body,
-    })
+    Ok(ReceivedRequest { method, headers, url, body })
 }
 
 #[cfg(test)]

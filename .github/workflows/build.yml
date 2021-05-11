@@ -47,8 +47,6 @@ jobs:
         cp "${d}/sccache-v0.2.15-x86_64-unknown-linux-musl/sccache" ~/.local/bin
         chmod +x ~/.local/bin/sccache
 
-
-          
     - name: Build
       run: cargo build --examples --all --verbose
       
@@ -58,6 +56,9 @@ jobs:
     - name: Run tests - verify echo server
       working-directory: smtr
       run: "python test-cases/verify.py"
+
+    - name: sscache stats
+      run: sccache --show-stats
       
   lint: 
     runs-on: ubuntu-latest

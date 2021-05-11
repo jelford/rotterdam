@@ -1,2 +1,8 @@
 rotterdam-data
 target
+.redo
+.vscode
+
+# redo targets
+*.tmp
+rotterdam-debug

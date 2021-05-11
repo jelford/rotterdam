@@ -1,11 +1,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::borrow::Cow;
+use std::io::BufRead;
 
 use url::Url;
 
 pub mod server;
 
+#[derive(Debug)]
+pub enum HttpProtocolVersion {
+    H1_0,
+    H1_1,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Method {
@@ -13,7 +19,21 @@ pub enum Method {
     PUT,
     DELETE,
     POST,
+    OPTION,
 }
+
+impl Method {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Method::GET => "GET",
+            Method::PUT => "PUT",
+            Method::DELETE => "DELETE",
+            Method::POST => "POST",
+            Method::OPTION => "OPTION",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum MediaType {
     TextPlain,
@@ -26,7 +46,7 @@ pub struct AcceptField {
     media_type: MediaType,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Header {
     Host,
     UserAgent,
@@ -35,36 +55,45 @@ pub enum Header {
     ContentLength,
     Authorization,
     CacheControl,
+    Other(Cow<'static, [u8]>),
 }
 
 impl Header {
-    pub fn as_header_string(&self) -> &'static str {
+    pub fn as_header_string(&self) -> Cow<[u8]> {
         match self {
-            Header::ContentType => "Content-Type",
-            Header::ContentLength => "Content-Length",
-            Header::CacheControl => "Cache-Control",
-            _ => {panic!("didn't expect to have to render {:?}", self);}
+            Header::Host => Cow::Borrowed(b"Host"),
+            Header::UserAgent => Cow::Borrowed(b"User-Agent"),
+            Header::ContentType => Cow::Borrowed(b"Content-Type"),
+            Header::ContentLength => Cow::Borrowed(b"Content-Length"),
+            Header::Accept=> Cow::Borrowed(b"Accept"),
+            Header::Authorization => Cow::Borrowed(b"Authorization"),
+            Header::CacheControl => Cow::Borrowed(b"Cache-Control"),
+            Header::Other(s) => s.clone(),
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Headers {
-    data: HashMap<Header, String>,
+    data: HashMap<Header, Cow<'static, [u8]>>,
 }
 
 impl Headers {
     pub fn set<V>(&mut self, key: Header, value: V)
-        where V : Into<String> {
+        where V : Into<Cow<'static, [u8]>> {
         self.data.insert(key, value.into());
     }
 
-    pub fn get(&self, key: Header) -> Option<&String> {
-        self.data.get(&key)
+    pub fn get(&self, key: Header) -> Option<&[u8]> {
+        self.data.get(&key).map(|cow| cow.as_ref())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=(&Header, &String)> {
-        self.data.iter()
+    pub fn iter(&self) -> impl Iterator<Item=(&Header, &[u8])> {
+        self.data.iter().map(|(name, val)| (name, val.as_ref()))
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 }
 
@@ -73,6 +102,7 @@ pub struct Request {
     method: Method,
     headers: Headers,
     url: Url,
+    body: Option<Box<dyn BufRead+Send>>,
 }
 
 impl Request {
@@ -97,5 +127,15 @@ impl Request {
 
     pub fn headers(&self) -> &Headers {
         &self.headers
+    }
+
+    pub fn body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error> {
+        if let Some(mut b) = self.body.take() {
+            let mut buff = Vec::new();
+            b.read_to_end(&mut buff)?;
+            Ok(Some(buff))
+        } else {
+            Ok(None)
+        }
     }
 }

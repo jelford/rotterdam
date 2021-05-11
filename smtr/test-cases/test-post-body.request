@@ -1,0 +1,10 @@
+curl -sS --data "{\"hello\": \"world\"}" -H "Content-Type: application/json" localhost:8508 
+{"args": [],
+ "body": "eyJoZWxsbyI6ICJ3b3JsZCJ9",
+ "headers": [{"name": "Accept", "value": "*/*"},
+             {"name": "Content-Length", "value": "18"},
+             {"name": "Content-Type", "value": "application/json"},
+             {"name": "Host", "value": "localhost:8508"},
+             {"name": "User-Agent", "value": "curl/7.76.1"}],
+ "method": "POST",
+ "path": "/"}

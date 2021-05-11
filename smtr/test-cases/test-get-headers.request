@@ -1,0 +1,24 @@
+curl -sS localhost:8508 -H "X-Header: some-header" -H "Accept: application/json"
+{
+  "args": [],
+  "headers": [
+    {
+      "name": "Accept",
+      "value": "application/json"
+    },
+    {
+      "name": "Host",
+      "value": "localhost:8508"
+    },
+    {
+      "name": "User-Agent",
+      "value": "curl/7.76.1"
+    },
+    {
+      "name": "X-Header",
+      "value": "some-header"
+    }
+  ],
+  "method": "GET",
+  "path": "/"
+}

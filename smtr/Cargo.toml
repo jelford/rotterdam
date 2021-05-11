@@ -9,3 +9,11 @@ edition = "2018"
 [dependencies]
 thiserror = "1"
 url = "2"
+log = "0.4"
+json = "0.12"
+
+[dev-dependencies]
+ureq = { version = "2", features = ["json"] }
+json = "0.12"
+base64 = "0.13"
+pretty_env_logger = "0.4"

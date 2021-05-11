@@ -1,0 +1,20 @@
+curl -sS localhost:8508
+{
+  "args": [],
+  "headers": [
+    {
+      "name": "Accept",
+      "value": "*/*"
+    },
+    {
+      "name": "Host",
+      "value": "localhost:8508"
+    },
+    {
+      "name": "User-Agent",
+      "value": "curl/7.76.1"
+    }
+  ],
+  "method": "GET",
+  "path": "/"
+}

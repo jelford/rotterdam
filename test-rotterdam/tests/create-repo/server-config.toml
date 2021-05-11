@@ -1,0 +1,8 @@
+[rotterdam]
+port = 0
+
+[rotterdam.git.filesystem]
+path = "./git"
+
+[rotterdam.binaries.filesystem]
+path = "./binaries"

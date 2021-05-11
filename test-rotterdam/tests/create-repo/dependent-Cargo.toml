@@ -1,0 +1,9 @@
+[package]
+name = "rotterdam-test-dependent"
+version = "0.0.1"
+authors = ["James Elford <james.p.elford@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+rotterdam-test-library = { repository = "rotterdam-test-repository", version = "0.0.1" }

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+
 use std::borrow::Cow;
 use std::io::BufRead;
 
@@ -65,7 +65,7 @@ impl Header {
             Header::UserAgent => Cow::Borrowed(b"User-Agent"),
             Header::ContentType => Cow::Borrowed(b"Content-Type"),
             Header::ContentLength => Cow::Borrowed(b"Content-Length"),
-            Header::Accept=> Cow::Borrowed(b"Accept"),
+            Header::Accept => Cow::Borrowed(b"Accept"),
             Header::Authorization => Cow::Borrowed(b"Authorization"),
             Header::CacheControl => Cow::Borrowed(b"Cache-Control"),
             Header::Other(s) => s.clone(),
@@ -80,7 +80,9 @@ pub struct Headers {
 
 impl Headers {
     pub fn set<V>(&mut self, key: Header, value: V)
-        where V : Into<Cow<'static, [u8]>> {
+    where
+        V: Into<Cow<'static, [u8]>>,
+    {
         self.data.insert(key, value.into());
     }
 
@@ -88,7 +90,7 @@ impl Headers {
         self.data.get(&key).map(|cow| cow.as_ref())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=(&Header, &[u8])> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Header, &[u8])> {
         self.data.iter().map(|(name, val)| (name, val.as_ref()))
     }
 
@@ -100,8 +102,8 @@ impl Headers {
 pub trait Request {
     fn method(&self) -> Method;
     fn path(&self) -> &str;
-    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)>; 
-    fn headers(&self) -> &Headers; 
-    fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error>; 
-    fn take_body(&mut self) -> Option<Box<dyn BufRead+Send>>;
+    fn query_pairs<'a>(&'a self) -> Vec<(Cow<str>, Cow<str>)>;
+    fn headers(&self) -> &Headers;
+    fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error>;
+    fn take_body(&mut self) -> Option<Box<dyn BufRead + Send>>;
 }

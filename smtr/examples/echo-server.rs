@@ -2,9 +2,8 @@ use json::object;
 use json::JsonValue;
 
 use smtr::{
-    Request,
-    server::{serve, Response, ResponseWriter},
-    Method,
+    server::{serve, Response},
+    Method, Request,
 };
 
 fn main() {
@@ -36,11 +35,12 @@ fn main() {
         match req.method() {
             Method::POST | Method::PUT => {
                 result["body"] = req
-                    .read_body().unwrap()
+                    .read_body()
+                    .unwrap()
                     .map(|b| JsonValue::String(base64::encode_config(b, base64::URL_SAFE)))
                     .unwrap_or(JsonValue::Null);
             }
-            _ => { /* no body in get/option/delete requests */}
+            _ => { /* no body in get/option/delete requests */ }
         };
 
         resp.send_response(

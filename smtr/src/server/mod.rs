@@ -1,5 +1,12 @@
 use core::panic;
-use std::{io::{BufWriter, BufRead, BufReader, Cursor}, marker::PhantomData, net::{TcpStream}, sync::mpsc, thread, time::Duration};
+use std::{
+    io::{BufRead, BufReader, BufWriter, Cursor},
+    marker::PhantomData,
+    net::TcpStream,
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 use thiserror::Error;
 
 use std::{
@@ -11,18 +18,22 @@ use super::*;
 
 pub type TcpResponseWriter = ResponseWriter<'static, BufWriter<TcpStream>>;
 
-pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(impl Request, TcpResponseWriter)>, BindError> {
-    
-    let base_url =
-        Url::parse(&format!("http://{}", bind_address)).map_err(|e| BindError::InvalidBindUrl(e))?;
-    let listener = TcpListener::bind(bind_address.to_string()).map_err(|e| BindError::InvalidBindAddress(e))?;
+pub fn serve(
+    bind_address: &str,
+) -> Result<mpsc::Receiver<(impl Request, TcpResponseWriter)>, BindError> {
+    let base_url = Url::parse(&format!("http://{}", bind_address))
+        .map_err(|e| BindError::InvalidBindUrl(e))?;
+    let listener = TcpListener::bind(bind_address.to_string())
+        .map_err(|e| BindError::InvalidBindAddress(e))?;
 
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
         for stream in listener.incoming() {
             let stream = stream.expect("Listener thread has died");
-            stream.set_read_timeout(Some(Duration::from_millis(500))).expect("Setting socket read timeout");
+            stream
+                .set_read_timeout(Some(Duration::from_millis(500)))
+                .expect("Setting socket read timeout");
 
             let response = match stream.try_clone() {
                 Err(e) => {
@@ -49,7 +60,8 @@ pub fn serve(bind_address: &str) -> Result<mpsc::Receiver<(impl Request, TcpResp
                 Err(HttpError::ClientError(code, reason)) => {
                     log::debug!(
                         "Should respond to client with {} (reason: {})",
-                        code, reason
+                        code,
+                        reason
                     );
                     handle_error(response, code);
                 }
@@ -81,13 +93,11 @@ pub enum HttpError {
     ClientError(u16, &'static str),
 }
 
-
-
 struct ReceivedRequest {
     method: Method,
     headers: Headers,
     url: Url,
-    body: Option<Box<dyn BufRead+Send>>,
+    body: Option<Box<dyn BufRead + Send>>,
 }
 
 impl Drop for ReceivedRequest {
@@ -174,7 +184,10 @@ where
     }
 }
 
-impl<'a, Stream> Drop for ResponseWriter<'a, Stream> where Stream: 'a + Write + Send {
+impl<'a, Stream> Drop for ResponseWriter<'a, Stream>
+where
+    Stream: 'a + Write + Send,
+{
     fn drop(&mut self) {
         log::debug!("{}", self.status.unwrap_or(0));
     }
@@ -208,7 +221,11 @@ where
         };
 
         for (h_name, h_value) in headers.iter() {
-            log::trace!("Writing header: {}:{}", String::from_utf8_lossy(&h_name.as_header_string()), String::from_utf8_lossy(h_value));
+            log::trace!(
+                "Writing header: {}:{}",
+                String::from_utf8_lossy(&h_name.as_header_string()),
+                String::from_utf8_lossy(h_value)
+            );
             self.stream.write_all(&h_name.as_header_string())?;
             self.stream.write_all(": ".as_bytes())?;
             self.stream.write_all(h_value)?;
@@ -296,14 +313,20 @@ impl Response {
 
 impl ResponseBuilder {
     pub fn content_type(mut self, content_type: &str) -> Self {
-        self.headers.set(Header::ContentType, content_type.as_bytes().to_vec());
+        self.headers
+            .set(Header::ContentType, content_type.as_bytes().to_vec());
         self
     }
 
     pub fn send_file(mut self, f: std::fs::File) -> Self {
         self.headers.set(
             Header::ContentLength,
-            f.metadata().expect("metadata").len().to_string().as_bytes().to_vec(),
+            f.metadata()
+                .expect("metadata")
+                .len()
+                .to_string()
+                .as_bytes()
+                .to_vec(),
         );
         self.stream = Some(Box::new(f));
         self
@@ -311,13 +334,16 @@ impl ResponseBuilder {
 
     pub fn body(mut self, b: Vec<u8>) -> Self {
         if let None = self.headers.get(Header::ContentLength) {
-            self.headers.set(Header::ContentLength, b.len().to_string().as_bytes().to_vec());
+            self.headers.set(
+                Header::ContentLength,
+                b.len().to_string().as_bytes().to_vec(),
+            );
         }
         self.stream = Some(Box::new(Cursor::new(b)));
         self
     }
 
-    pub fn body_from_string(mut self, s: &str) -> Self {
+    pub fn body_from_string(self, s: &str) -> Self {
         let bs = s.as_bytes().to_vec();
         self.body(bs)
     }
@@ -331,20 +357,25 @@ impl ResponseBuilder {
     }
 }
 
-fn read_until_limited<R>(reader: &mut BufReader<R>, needle: u8, line_len_limit: usize) -> Result<Vec<u8>, HttpError> 
-    where R: Read {
-
+fn read_until_limited<R>(
+    reader: &mut BufReader<R>,
+    needle: u8,
+    line_len_limit: usize,
+) -> Result<Vec<u8>, HttpError>
+where
+    R: Read,
+{
     let mut buf = Vec::new();
     let mut found = false;
     while buf.len() < line_len_limit {
         let cur = reader.fill_buf()?;
         if let Some(newline) = cur.iter().position(|&b| b == needle) {
             buf.extend_from_slice(&cur[..newline]);
-            reader.consume(newline+1);
+            reader.consume(newline + 1);
             found = true;
             break;
         } else {
-            let to_consume = cur.len().min(line_len_limit-buf.len());
+            let to_consume = cur.len().min(line_len_limit - buf.len());
             buf.extend_from_slice(&cur[..to_consume]);
             reader.consume(to_consume);
         }
@@ -357,7 +388,7 @@ fn read_until_limited<R>(reader: &mut BufReader<R>, needle: u8, line_len_limit: 
     }
 }
 
-fn parse_request<R>(base_url: &Url, mut stream: R) -> Result<ReceivedRequest, HttpError>
+fn parse_request<R>(base_url: &Url, stream: R) -> Result<ReceivedRequest, HttpError>
 where
     R: Read + Send + 'static,
 {
@@ -381,21 +412,40 @@ where
     let (used, path) = {
         let rest = stream.fill_buf()?;
 
-        let sp_idx = rest.iter().position(|&b| b == b' ').ok_or(HttpError::ClientError(400, "Not enough data in first line - no path".into()))?;
-        
-        (sp_idx+1, String::from_utf8_lossy(&rest[..sp_idx]).to_string())
+        let sp_idx = rest
+            .iter()
+            .position(|&b| b == b' ')
+            .ok_or(HttpError::ClientError(
+                400,
+                "Not enough data in first line - no path".into(),
+            ))?;
+
+        (
+            sp_idx + 1,
+            String::from_utf8_lossy(&rest[..sp_idx]).to_string(),
+        )
     };
     stream.consume(used);
 
     let (used, http_version) = {
-
         let rest = stream.fill_buf()?;
-        let mut sp_idx = rest.iter().position(|b| b.is_ascii_whitespace()).ok_or(HttpError::ClientError(400, "Http version not specified".into()))?;
+        let mut sp_idx =
+            rest.iter()
+                .position(|b| b.is_ascii_whitespace())
+                .ok_or(HttpError::ClientError(
+                    400,
+                    "Http version not specified".into(),
+                ))?;
 
         let http_ver = match &rest[..sp_idx] {
             b"HTTP/1.0" => HttpProtocolVersion::H1_0,
             b"HTTP/1.1" => HttpProtocolVersion::H1_1,
-            _ => return Err(HttpError::ClientError(400, "Unrecognized HTTP version".into()))
+            _ => {
+                return Err(HttpError::ClientError(
+                    400,
+                    "Unrecognized HTTP version".into(),
+                ))
+            }
         };
 
         while sp_idx < rest.len() && rest[sp_idx].is_ascii_whitespace() {
@@ -406,11 +456,13 @@ where
     };
     stream.consume(used);
 
-    
-    log::trace!("Incoming request has http protocol version: {:?}", http_version);
-    
+    log::trace!(
+        "Incoming request has http protocol version: {:?}",
+        http_version
+    );
+
     let mut headers = Headers::default();
-    
+
     loop {
         if headers.len() > 100 {
             log::warn!("Stopping after first 100 headers");
@@ -424,16 +476,23 @@ where
 
         let (key, value) = {
             let mut parts = line.splitn(2, |&b| b == b':');
-            let key = parts.next().ok_or(HttpError::ClientError(400, "Bad header name"))?;
+            let key = parts
+                .next()
+                .ok_or(HttpError::ClientError(400, "Bad header name"))?;
             if key.iter().any(|b| b.is_ascii_whitespace()) {
-                return Err(HttpError::ClientError(400, "Whitespace found in header name"));
+                return Err(HttpError::ClientError(
+                    400,
+                    "Whitespace found in header name",
+                ));
             }
-            let mut value = parts.next().ok_or(HttpError::ClientError(400, "Bad header value"))?;
+            let mut value = parts
+                .next()
+                .ok_or(HttpError::ClientError(400, "Bad header value"))?;
             while value.len() > 0 && value[0].is_ascii_whitespace() {
                 value = &value[1..];
             }
-            while value.len() > 0 && value[value.len()-1].is_ascii_whitespace() {
-                value = &value[..value.len()-1];
+            while value.len() > 0 && value[value.len() - 1].is_ascii_whitespace() {
+                value = &value[..value.len() - 1];
             }
             if value.len() == 0 {
                 return Err(HttpError::ClientError(400, "Empty header value"));
@@ -448,7 +507,7 @@ where
             b"content-length" => Header::ContentLength,
             b"authorization" => Header::Authorization,
             b"user-agent" => Header::UserAgent,
-            _ => Header::Other(Cow::from(key.to_vec()))
+            _ => Header::Other(Cow::from(key.to_vec())),
         };
 
         headers.set(header, value.to_vec());
@@ -456,14 +515,18 @@ where
 
     let body = {
         if let Some(len) = headers.get(Header::ContentLength) {
-            let content_len: u64 = String::from_utf8_lossy(len).parse().map_err(|_| HttpError::ClientError(400, "Bad Content-Length"))?;
+            let content_len: u64 = String::from_utf8_lossy(len)
+                .parse()
+                .map_err(|_| HttpError::ClientError(400, "Bad Content-Length"))?;
             if content_len > 10_000 {
                 return Err(HttpError::ClientError(400, "Oversized Entity Body"));
             }
 
             let already_read = Cursor::new(stream.buffer().to_vec());
             let read_buf = stream.into_inner();
-            let body: Box<dyn BufRead+Send> = Box::new(BufReader::new(already_read.chain(read_buf).take(content_len)));
+            let body: Box<dyn BufRead + Send> = Box::new(BufReader::new(
+                already_read.chain(read_buf).take(content_len),
+            ));
             Some(body)
         } else {
             None
@@ -552,9 +615,8 @@ mod test {
         let mut body = result.take_body().unwrap();
         let mut result = Vec::new();
         body.read_to_end(&mut result).unwrap();
-        
-        assert_eq!(&result, b"Hello world");
 
+        assert_eq!(&result, b"Hello world");
     }
 
     #[test]
@@ -564,7 +626,13 @@ mod test {
 
         {
             let mut response = new_response_writer_for_ref(&mut output);
-            let _ = response.send_response(Response::builder(200).body_from_string("Hello world").build()).unwrap();
+            let _ = response
+                .send_response(
+                    Response::builder(200)
+                        .body_from_string("Hello world")
+                        .build(),
+                )
+                .unwrap();
         }
 
         let result = output.get_ref().as_slice();
@@ -581,7 +649,7 @@ mod test {
     #[test]
     fn read_line_limited_returns_line_excl_newline() {
         let mut input = BufReader::new(Cursor::new(b"line 1\r\nline 2\r\nline 3\n"));
-        
+
         let result = read_until_limited(&mut input, b'\n', 30).unwrap();
         assert_eq!(result, b"line 1\r".to_vec());
 

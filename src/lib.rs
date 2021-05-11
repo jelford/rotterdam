@@ -1,10 +1,17 @@
+use std::{
+    collections::HashMap,
+    error::Error,
+    io::{stdout, Write},
+    os::unix::prelude::AsRawFd,
+    path::PathBuf,
+    str::FromStr,
+};
 
-use std::{collections::HashMap, error::Error, io::{Write, stderr, stdout}, os::unix::prelude::AsRawFd, path::PathBuf, str::FromStr};
-use std::borrow::Cow;
-use smtr::{Header, Method, Request, server::{Response, TcpResponseWriter}};
-use anyhow::{Result, Context};
-use std::process::{Command, Stdio, ExitStatus};
-use std::io::Cursor;
+use anyhow::Result;
+use smtr::{
+    server::{Response, TcpResponseWriter},
+    Method, Request,
+};
 
 use clap;
 
@@ -26,7 +33,10 @@ struct Repo {
 
 impl Repo {
     fn git_path(&self) -> PathBuf {
-        PathBuf::from("rotterdam-data").join(&self.name).join("index").join(".git")
+        PathBuf::from("rotterdam-data")
+            .join(&self.name)
+            .join("index")
+            .join(".git")
     }
 }
 
@@ -38,27 +48,19 @@ struct App {
 impl App {
     fn handle(&self, req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
         let path_parts: Vec<_> = req.path().split("/").collect();
-    
-        match (req.method(), path_parts.as_slice()) {
-            (Method::POST, ["", "api", "v1", "token"]) => {
-                self.handle_token_create(req, resp)
-            },
-            (_, ["", "repo", "index"]) => {
-                self.handle_git_request(req, resp)
-            }
-            (method, ["", "repo", repo_name, "index", rest @ ..]) => {
 
-                let headers = req.headers().clone();
+        match (req.method(), path_parts.as_slice()) {
+            (Method::POST, ["", "api", "v1", "token"]) => self.handle_token_create(req, resp),
+            (_, ["", "repo", "index"]) => self.handle_git_request(req, resp),
+            (_method, ["", "repo", repo_name, "index", rest @ ..]) => {
+                let _headers = req.headers().clone();
                 let mut path = PathBuf::from(repo_name);
                 for r in rest {
                     path.push(r);
                 }
-                
 
-                return self.handle_git_request(
-                    req,
-                    resp);
-            },
+                return self.handle_git_request(req, resp);
+            }
             _ => {
                 resp.send_response(Response::err(404))?;
                 Ok(())
@@ -66,15 +68,23 @@ impl App {
         }
     }
 
-    fn handle_token_create(&self, req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
-        let r = Response::builder(200).content_type("application/json").body(br#"{ "token": "12345" }"#.to_vec()).build();
+    fn handle_token_create(&self, _req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
+        let r = Response::builder(200)
+            .content_type("application/json")
+            .body(br#"{ "token": "12345" }"#.to_vec())
+            .build();
         resp.send_response(r)?;
-        
+
         Ok(())
     }
 
-    fn handle_git_request(&self, req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
-        resp.send_response(Response::builder(200).content_type("text/plain").body("Hello world!".as_bytes().to_vec()).build())?;
+    fn handle_git_request(&self, _req: &dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
+        resp.send_response(
+            Response::builder(200)
+                .content_type("text/plain")
+                .body("Hello world!".as_bytes().to_vec())
+                .build(),
+        )?;
         Ok(())
         // println!("Got a request for git stuff: {}, {:?}, {:?}", req.repo_name, req.path, req.args);
 
@@ -107,7 +117,7 @@ impl App {
         //     Ok(())
         // } else {
         //     Ok(())
-        // }        
+        // }
     }
 }
 
@@ -134,24 +144,32 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         let mut s = stdout.lock();
         s.write_all(br#"{ "port": 8080 }"#)?;
         s.flush()?;
-        unsafe { let _ = libc::close(s.as_raw_fd()); };
+        unsafe {
+            let _ = libc::close(s.as_raw_fd());
+        };
     }
 
     let mut configured_repos = HashMap::new();
-    configured_repos.insert("foorepo", Repo { name: "foorepo".into() });
+    configured_repos.insert(
+        "foorepo",
+        Repo {
+            name: "foorepo".into(),
+        },
+    );
 
     let app = App {
         git_storage_path: PathBuf::from_str("rotterdam-data/git").expect("git storage path"),
         configured_repos: configured_repos,
     };
 
-
     let chan = smtr::server::serve("127.0.0.1:8080")?;
-    for (req, mut response_writer) in chan {
+    for (req, response_writer) in chan {
         log::debug!("Reading request: {:?} : {:?}", req.method(), req.path());
         match app.handle(&req, response_writer) {
-            Ok(_) => {},
-            Err(e) => { eprint!("Something went wrong: {:?}", e); }
+            Ok(_) => {}
+            Err(e) => {
+                eprint!("Something went wrong: {:?}", e);
+            }
         }
     }
 

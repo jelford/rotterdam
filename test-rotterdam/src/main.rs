@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::path::PathBuf;
 use std::{
     env,
@@ -55,7 +54,7 @@ fn start_server() -> RotterdamServerInstance {
         .expect("reading server info");
     let server_info = json::parse(&server_info)
         .expect("Couldn't understand server_info from rotterdam server process");
-    
+
     let port = server_info["port"]
         .as_u16()
         .ok_or("port not found in server info")
@@ -76,15 +75,22 @@ fn fetch_admin_token(server: &RotterdamServerInstance) -> String {
         .send_bytes(br#"{"name": "test-user"}"#);
     println!("{:?}", response);
     let response = response.unwrap();
-    println!("Got token response with HTTP version: {}", response.http_version());
-    println!("Expecting content-length: {}", response.header("Content-Length").unwrap_or("<not send>"));
+    println!(
+        "Got token response with HTTP version: {}",
+        response.http_version()
+    );
+    println!(
+        "Expecting content-length: {}",
+        response.header("Content-Length").unwrap_or("<not send>")
+    );
 
     let result = response.into_string().unwrap();
     println!("Got body from server: {}", result);
 
     json::parse(&result).unwrap()["token"]
         .take_string()
-        .ok_or("No token in response").unwrap();
+        .ok_or("No token in response")
+        .unwrap();
 
     result
 }
@@ -93,9 +99,10 @@ fn fetch_admin_token(server: &RotterdamServerInstance) -> String {
 fn main() {
     let mut server = start_server();
 
-    let lib_project_dir = tempfile::tempdir().expect("Setting up temp directory");
+    let _lib_project_dir = tempfile::tempdir().expect("Setting up temp directory");
     // let p = lib_project_dir.path();
-    let p = PathBuf::from("/tmp/fixed-test-dir"); std::fs::remove_dir_all(&p).unwrap();
+    let p = PathBuf::from("/tmp/fixed-test-dir");
+    std::fs::remove_dir_all(&p).unwrap();
     std::fs::create_dir(&p).unwrap();
     assert!(Command::new("cargo")
         .arg("init")
@@ -103,8 +110,10 @@ fn main() {
         .arg("--name")
         .arg("test-library")
         .current_dir(&p)
-        .spawn().unwrap()
-        .wait().unwrap()
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap()
         .success());
 
     std::fs::create_dir(&p.join(".cargo")).expect("creating .cargo for lib project");
@@ -116,18 +125,22 @@ fn main() {
         [registries]
         rotterdam-test-registry = {{ index = \"http://localhost:{}/repo/testrepo/index\" }}",
         server.port
-    ).unwrap();
+    )
+    .unwrap();
     drop(config);
     std::fs::copy(
         PathBuf::from("tests/create-repo/library-Cargo.toml"),
         &p.join("Cargo.toml"),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(Command::new("cargo")
         .current_dir(&p)
         .arg("build")
-        .spawn().unwrap()
-        .wait().unwrap()
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap()
         .success());
 
     let token = fetch_admin_token(&server);
@@ -140,9 +153,15 @@ fn main() {
         .arg("--registry")
         .arg("rotterdam-test-registry")
         .stdin(Stdio::piped())
-        .spawn().unwrap();
+        .spawn()
+        .unwrap();
 
-    login_child.stdin.as_ref().expect("stdin of login child").write_all(&token.as_bytes()).unwrap();
+    login_child
+        .stdin
+        .as_ref()
+        .expect("stdin of login child")
+        .write_all(&token.as_bytes())
+        .unwrap();
     assert!(login_child.wait().unwrap().success());
 
     // assert!(Command::new("cargo")
@@ -154,5 +173,4 @@ fn main() {
     //     .success());
 
     println!("Server status: {:?}", server.process.try_wait());
-
 }

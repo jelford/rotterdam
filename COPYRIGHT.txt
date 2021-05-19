@@ -1,0 +1,10 @@
+# Copyright holders:
+
+- James Elford <james.p.elford@gmail.com>
+
+# Licenses:
+
+- The rotterdam application is licensed under the AGPL 3.0 (see LICENSE.txt)
+- The smtr project is dual-licensed under Apache 2.0 and MIT (see smtr/LICENSE-MIT and smtr/LICENSE-APACHE)
+
+ 

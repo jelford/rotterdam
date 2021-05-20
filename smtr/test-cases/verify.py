@@ -7,10 +7,11 @@ import sys
 import contextlib
 from time import sleep
 from typing import Dict, Any, List
-from pprint import pprint
+import logging
 
 __here = Path(__file__).parent
 
+logger = logging.getLogger(__name__)
 
 
 @contextlib.contextmanager
@@ -23,11 +24,11 @@ def _echo_server():
         subprocess.check_call(["cargo", "build", "--examples"])
         p = subprocess.Popen(["cargo", "run", "--example", "echo-server", "--quiet"], stdout=subprocess.PIPE, stderr=None, stdin=None, encoding='utf-8')
         for _ in range(10):
-            print("Checking...")
             if p.poll() is not None:
                 raise RuntimeError("Echo server failed")
             if p.stdout.readline().startswith("Listening on port "):
                 break
+            logger.debug("Waiting for server process to start...")
             sleep(0.01)
         else:
             raise RuntimeError("Never got listening message from server")
@@ -58,10 +59,13 @@ def _normalize_list(from_json: List[Any]) -> List[Any]:
 
 
 def run():
-    test_cases = __here.glob("test-*.request")
+    logger.info("Starting test run")
+    test_cases = list(__here.glob("test-*.request"))
+    logger.info("Found %s test cases", len(test_cases))
     fail = None
     with _echo_server():
         for test_case in test_cases:
+            logger.info("Running: %s", test_case)
             with test_case.open("r", encoding="utf-8") as f:
                 command = f.readline().strip()
                 expected_raw = f.read()
@@ -82,7 +86,8 @@ def run():
                 fail = True
         
     sys.exit(fail)
-        
+
 
 if __name__ == "__main__":
+    logging.basicConfig(level=getattr(logging, os.getenv("LOG_LEVEL", "DEBUG"), logging.DEBUG))
     run()

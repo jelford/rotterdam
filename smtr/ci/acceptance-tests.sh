@@ -1,5 +1,5 @@
-#!/usr/bin/env
+#!/usr/bin/env bash
 set -euo pipefail
 set IFS=$'\t\n'
 
-python3 test-cases/verify.py
+python test-cases/verify.py

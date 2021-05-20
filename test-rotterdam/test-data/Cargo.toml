@@ -1,6 +1,0 @@
-[package]
-name = "rotterdam-test-library"
-version = "0.0.1"
-authors = ["James Elford <james.p.elford@gmail.com>"]
-edition = "2018"
-publish = ["rotterdam-test-registry"]

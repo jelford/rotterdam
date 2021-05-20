@@ -10,4 +10,4 @@ tempfile = "3"
 ureq = { version = "2", features = ["json"] }
 json = "0.12"
 log = "0.4"
-
+pretty_env_logger = "0.4"

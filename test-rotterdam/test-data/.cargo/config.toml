@@ -1,2 +1,0 @@
-[registries]
-        rotterdam-test-registry = { index = "http://localhost:8080/repo/index" }

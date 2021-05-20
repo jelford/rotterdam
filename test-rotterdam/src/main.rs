@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::{fs::File, path::{PathBuf, Path}};
 use std::{
     env,
     io::{Read, Write},
     process::{Command, Stdio},
 };
+use log;
 
 struct RotterdamServerInstance {
     pub port: u16,
@@ -14,7 +15,7 @@ struct RotterdamServerInstance {
 impl Drop for RotterdamServerInstance {
     fn drop(&mut self) {
         if let Ok(Some(st)) = self.process.try_wait() {
-            println!("Server shut down with status: {}", st);
+            log::debug!("Server shut down with status: {}", st);
         } else {
             // Error likely implies process already dead (possible via a race with the try_wait).
             let _ = self.process.kill();
@@ -29,12 +30,12 @@ fn start_server() -> RotterdamServerInstance {
         env::var("ROTTERDAM_BIN").expect("Need to set ROTTERDAM_BIN environment variable"),
     );
 
+    log::info!("Using rotterdam bin from: {}", rotterdam_path.to_string_lossy());
+
     let working_dir = tempfile::tempdir().expect("Setting up temp directory");
     let workdir_path = working_dir.path();
 
-    let config_path = PathBuf::from("./tests/create-repo/server-config.toml")
-        .canonicalize()
-        .unwrap();
+    let config_path = test_data_path("create-repo/server-config.toml");
 
     let mut server = Command::new(rotterdam_path)
         .arg("--print-info")
@@ -68,24 +69,24 @@ fn start_server() -> RotterdamServerInstance {
 }
 
 fn fetch_admin_token(server: &RotterdamServerInstance) -> String {
-    println!("Fetching token...");
+    log::trace!("Fetching token...");
     let response = ureq::post(&format!("http://localhost:{}/api/v1/token", server.port))
         .set("Content-Type", "application/json")
         .set("Accept", "application_json")
         .send_bytes(br#"{"name": "test-user"}"#);
-    println!("{:?}", response);
+    log::trace!("{:?}", response);
     let response = response.unwrap();
-    println!(
+    log::trace!(
         "Got token response with HTTP version: {}",
         response.http_version()
     );
-    println!(
+    log::trace!(
         "Expecting content-length: {}",
         response.header("Content-Length").unwrap_or("<not send>")
     );
 
     let result = response.into_string().unwrap();
-    println!("Got body from server: {}", result);
+    log::trace!("Got body from server: {}", result);
 
     json::parse(&result).unwrap()["token"]
         .take_string()
@@ -95,15 +96,38 @@ fn fetch_admin_token(server: &RotterdamServerInstance) -> String {
     result
 }
 
+fn test_data_path<P: Into<PathBuf>>(rel_path_from_test_folder: P) -> PathBuf {
+    let pkg_root = env!("CARGO_MANIFEST_DIR");
+    let pkg_root = PathBuf::from(pkg_root).canonicalize().expect("Canonicalizing package manifest directory");
+    let test_data = pkg_root.join("tests");
+    let source_file = test_data.join(rel_path_from_test_folder.into());
+    assert!(source_file.exists(), "Source file to copy does not exist: {}", source_file.to_string_lossy());
+    let source_file = source_file.canonicalize().expect("Canonicalizing source file for copy");
+
+    source_file
+}
+
+fn lib_project_dir() -> (tempfile::TempDir, PathBuf) {
+    let lib_project_dir = tempfile::tempdir().expect("Setting up temp directory");
+    // let p = lib_project_dir.path().to_path_buf();
+    // (lib_project, p)
+
+    let p = PathBuf::from("/tmp/fixed-test-dir");
+    if let Err(e) = std::fs::remove_dir_all(&p) {
+        assert!(!p.exists(), "Unable to delete {}: {}", p.to_string_lossy(), e);
+    }
+    std::fs::create_dir(&p).unwrap();
+
+    (lib_project_dir, p)
+}
+
 // #[test]
 fn main() {
+    pretty_env_logger::init_timed();
+    
     let mut server = start_server();
-
-    let _lib_project_dir = tempfile::tempdir().expect("Setting up temp directory");
-    // let p = lib_project_dir.path();
-    let p = PathBuf::from("/tmp/fixed-test-dir");
-    std::fs::remove_dir_all(&p).unwrap();
-    std::fs::create_dir(&p).unwrap();
+    let (_tmp, p) = lib_project_dir();
+    
     assert!(Command::new("cargo")
         .arg("init")
         .arg("--lib")
@@ -117,7 +141,7 @@ fn main() {
         .success());
 
     std::fs::create_dir(&p.join(".cargo")).expect("creating .cargo for lib project");
-    let mut config = std::fs::File::create(&p.join(".cargo").join("config.toml"))
+    let mut config = File::create(&p.join(".cargo").join("config.toml"))
         .expect("creating .cargo/config.toml for lib");
     write!(
         config,
@@ -129,7 +153,7 @@ fn main() {
     .unwrap();
     drop(config);
     std::fs::copy(
-        PathBuf::from("tests/create-repo/library-Cargo.toml"),
+        test_data_path("create-repo/library-Cargo.toml"),
         &p.join("Cargo.toml"),
     )
     .unwrap();
@@ -144,7 +168,7 @@ fn main() {
         .success());
 
     let token = fetch_admin_token(&server);
-    println!("Token: {}", token);
+    log::debug!("Token: {}", token);
 
     let mut login_child = Command::new("cargo")
         .env("CARGO_HOME", p.as_os_str())
@@ -172,5 +196,5 @@ fn main() {
     //     .wait()?
     //     .success());
 
-    println!("Server status: {:?}", server.process.try_wait());
+    log::info!("Server status: {:?}", server.process.try_wait());
 }

@@ -468,6 +468,7 @@ version = "0.1.0"
 dependencies = [
  "json",
  "log",
+ "pretty_env_logger",
  "tempfile",
  "ureq",
 ]

@@ -48,14 +48,14 @@ jobs:
         chmod +x ~/.local/bin/sccache
 
     - name: Build
-      run: cargo build --examples --all --verbose
+      run: ci/build.sh
       
     - name: Run tests - cargo
-      run: cargo test --all --verbose
+      run: ci/tests.sh
 
-    - name: Run tests - verify echo server
+    - name: Run tests - acceptance tests
       working-directory: smtr
-      run: "python test-cases/verify.py"
+      run: ci/acceptance-tests.sh
 
     - name: sscache stats
       run: sccache --show-stats

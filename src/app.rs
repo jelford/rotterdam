@@ -1,3 +1,5 @@
+use crate::config::AppGitConfig;
+
 use super::config;
 use super::Result;
 use super::git_cgi;
@@ -45,12 +47,12 @@ impl App {
 }
 
 
-fn ensure_index_setup(repo_storage_path: &Path, repo_name: &str) -> Result<()> {
+fn ensure_index_setup(config: &AppGitConfig, repo_name: &str) -> Result<()> {
     if ! repo_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         bail!("Repo names must match [a-zA-Z_]. Got: {}", repo_name);
     }
 
-    let repo_index_path = repo_storage_path.join(repo_name);
+    let repo_index_path = config.path.join(repo_name);
 
     if ! repo_index_path.exists() {
         log::info!("Initializing repo: {} (creating folder at: {})", repo_name, repo_index_path.to_string_lossy());
@@ -112,7 +114,15 @@ fn ensure_index_setup(repo_storage_path: &Path, repo_name: &str) -> Result<()> {
 
         let commit_result = Command::new("git")
             .current_dir(&repo_index_path)
-            .args(&["commit", "-m", "(rotterdam): Initializing repo", "--author", "rotterdam <bot@example.com>", "--", "config.json"])
+            .args(&[
+                "-c", &format!("user.name='{}'", config.author_name), 
+                "-c", &format!("user.email='{}'", config.author_email), 
+                "commit", 
+                "-m", 
+                "(rotterdam): Initializing repo", 
+                "--author", &config.author, 
+                "--", 
+                "config.json"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -130,24 +140,18 @@ fn ensure_index_setup(repo_storage_path: &Path, repo_name: &str) -> Result<()> {
 
 
 impl App {
-    fn ready_config(config: config::AppConfig) -> Result<config::AppConfig> {
+    fn ready_config(mut config: config::AppConfig) -> Result<config::AppConfig> {
         if ! config.git.path.exists() {
             std::fs::create_dir_all(&config.git.path)?;
         }
 
         let canonical_path = config.git.path.canonicalize()?;
 
-        for (name, _details) in config.repos.iter() {
-            ensure_index_setup(&canonical_path, name)?;
-        }
+        config.git.path = canonical_path;
 
-        let config = config::AppConfig {
-            repos: config.repos,
-            git: config::AppGitConfig {
-                author: config.git.author,
-                path: canonical_path,
-            }
-        };
+        for (name, _details) in config.repos.iter() {
+            ensure_index_setup(&config.git, name)?;
+        }
 
         Ok(config)
     }

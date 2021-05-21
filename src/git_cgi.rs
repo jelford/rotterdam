@@ -4,7 +4,7 @@ use super::{Request, TcpResponseWriter, Response};
 
 use anyhow::{Result, Context, bail};
 
-use std::{borrow::Cow, collections::HashMap, env, error::Error, ffi::OsString, io::{Read, Write, stdout}, os::unix::prelude::AsRawFd, path::{Path, PathBuf}, process::Command, str::FromStr};
+use std::{ffi::OsString, io::{Read}, process::Command};
 use std::process::{Stdio};
 
 
@@ -69,7 +69,7 @@ pub(crate) fn handle(config: &AppConfig, req: &mut dyn Request, mut resp: TcpRes
 
     if let Some(content_length) = req.headers().get(smtr::Header::ContentLength) {
         let result: Result<usize, _> = String::from_utf8_lossy(content_length).parse();
-        if let Err(_) = result {
+        if result.is_err() {
             log::debug!("Bad content-length");
             resp.send_response(Response::err(400))?;
             return Ok(());

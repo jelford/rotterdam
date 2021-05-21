@@ -162,11 +162,6 @@ impl App {
         Ok(app)
     }
 
-    fn load_config(&mut self, config: AppConfig) -> Result<()> {
-        self.config = App::ready_config(config)?;
-        Ok(())
-    }
-
     fn handle(&self, req: &mut dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
         let path_parts: Vec<_> = req.path().split('/').collect();
 
@@ -194,7 +189,7 @@ impl App {
     }
 
 
-    fn handle_git_request(&self, req: &mut dyn Request, mut resp: TcpResponseWriter) -> Result<()> {
+    fn handle_git_request(&self, req: &mut dyn Request, resp: TcpResponseWriter) -> Result<()> {
         log::debug!("Git request");
 
         git_cgi::handle(&self.config, req, resp)
@@ -263,7 +258,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 _ => {
-                    return Err(anyhow!("rotterdam.repos must be either a table or list of repositories to serve"))?;
+                    return Err(anyhow!("rotterdam.repos must be either a table or list of repositories to serve").into());
                 }
             }
         }

@@ -129,10 +129,8 @@ impl Request for ReceivedRequest {
 
     fn query_pairs(&self) -> Vec<(Cow<str>, Cow<str>)> {
         let mut pairs = Vec::new();
-        let mut i = 0;
         for p in self.url.query_pairs() {
             pairs.push((p.0.clone(), p.1.clone()));
-            i += 1;
         }
         pairs
     }

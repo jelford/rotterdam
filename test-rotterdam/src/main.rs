@@ -1,10 +1,10 @@
-use std::{fs::File, path::{PathBuf, Path}};
+use std::{fs::File, path::{PathBuf}};
 use std::{
     env,
     io::{Read, Write},
     process::{Command, Stdio},
 };
-use log;
+
 
 struct RotterdamServerInstance {
     pub port: u16,

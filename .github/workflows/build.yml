@@ -53,8 +53,11 @@ jobs:
     - name: Run tests - cargo
       run: ci/tests.sh
 
-    - name: Run tests - acceptance tests
+    - name: Run tests - acceptance tests (smtr)
       working-directory: smtr
+      run: ci/acceptance-tests.sh
+
+    - name: Run tests - acceptance tests (rotterdam)
       run: ci/acceptance-tests.sh
 
     - name: sscache stats

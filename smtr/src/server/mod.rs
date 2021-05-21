@@ -123,15 +123,28 @@ impl Request for ReceivedRequest {
         &self.url.path()
     }
 
+    fn query_string(&self) -> Option<&str> {
+        self.url.query()
+    }
+
     fn query_pairs(&self) -> Vec<(Cow<str>, Cow<str>)> {
         let mut pairs = Vec::new();
         let mut i = 0;
         for p in self.url.query_pairs() {
             pairs.push((p.0.clone(), p.1.clone()));
             i += 1;
-            println!("{}", i);
         }
         pairs
+    }
+
+    fn query_first_value(&self, key: &str) -> Option<Cow<str>> {
+        for (k, v) in self.query_pairs() {
+            if k == key {
+                return Some(v.clone());
+            }
+        }
+
+        None
     }
 
     fn headers(&self) -> &Headers {
@@ -269,7 +282,13 @@ where
 
         Ok(())
     }
+
+    pub fn raw_writer(&mut self) -> &mut dyn Write {
+        &mut self.stream
+    }
 }
+
+
 
 pub struct Response {
     status: u16,
@@ -588,6 +607,33 @@ mod test {
             Some(b"curl/7.71.1" as &[u8])
         );
         assert_eq!(result.headers.get(Header::Accept), Some(b"*/*" as &[u8]));
+    }
+
+
+    #[test]
+    fn returns_query_parameters() {
+        let req = Cursor::new(
+            b"GET /hello?hello=world&hello=again HTTP/1.1\r\n\
+            Host: localhost:8080\r\n\
+            User-Agent: curl/7.71.1\r\n\
+            Accept: */*\r\n\
+            \r\n",
+        );
+
+        let result = parse_request(&base_url(), req);
+
+        let result = result.unwrap();
+
+        let qps = result.query_pairs();
+        let mut query_pairs = qps.iter();
+        assert_eq!(query_pairs.next(), Some(&(Cow::from("hello"), Cow::from("world")) ));
+        assert_eq!(query_pairs.next(), Some(&(Cow::from("hello"), Cow::from("again")) ));
+        assert_eq!(query_pairs.next(), None);
+
+        assert_eq!(result.query_first_value("hello"), Some(Cow::from("world")));
+
+        assert_eq!(result.query_string(), Some("hello=world&hello=again"));
+
     }
 
     #[test]

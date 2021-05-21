@@ -1,5 +1,6 @@
 [rotterdam]
 port = 0
+repos = ["testrepo"]
 
 [rotterdam.git.filesystem]
 path = "./git"

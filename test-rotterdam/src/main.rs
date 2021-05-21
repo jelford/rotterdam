@@ -33,7 +33,11 @@ fn start_server() -> RotterdamServerInstance {
     log::info!("Using rotterdam bin from: {}", rotterdam_path.to_string_lossy());
 
     let working_dir = tempfile::tempdir().expect("Setting up temp directory");
-    let workdir_path = working_dir.path();
+    let workdir_path = PathBuf::from("/tmp/rotterdam-runtime-path"); // working_dir.path();
+    if let Err(_) = std::fs::remove_dir_all(&workdir_path) {
+        assert!(!workdir_path.exists());
+    }
+    std::fs::create_dir_all(&workdir_path).expect("Setting up runtime path");
 
     let config_path = test_data_path("create-repo/server-config.toml");
 
@@ -172,6 +176,7 @@ fn main() {
 
     let mut login_child = Command::new("cargo")
         .env("CARGO_HOME", p.as_os_str())
+        .env("CARGO_LOG", "debug")
         .current_dir(&p)
         .arg("login")
         .arg("--registry")

@@ -105,7 +105,9 @@ impl Headers {
 pub trait Request {
     fn method(&self) -> Method;
     fn path(&self) -> &str;
+    fn query_string(&self) -> Option<&str>;
     fn query_pairs(&self) -> Vec<(Cow<str>, Cow<str>)>;
+    fn query_first_value(&self, key: &str) -> Option<Cow<str>>;
     fn headers(&self) -> &Headers;
     fn read_body(&mut self) -> Result<Option<Vec<u8>>, std::io::Error>;
     fn take_body(&mut self) -> Option<Box<dyn BufRead + Send>>;

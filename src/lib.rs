@@ -41,6 +41,7 @@ struct AppConfig {
 
 struct AppGitConfig {
     path: PathBuf,
+    author: String,
 }
 
 struct App {
@@ -105,7 +106,7 @@ fn ensure_index_setup(repo_storage_path: &Path, repo_name: &str) -> Result<()> {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
-            .spawn().context("Commiting repo config")?
+            .spawn().context("Staging repo config")?
             .wait_with_output()?;
 
         if ! add_result.status.success() {
@@ -115,7 +116,7 @@ fn ensure_index_setup(repo_storage_path: &Path, repo_name: &str) -> Result<()> {
 
         let commit_result = Command::new("git")
             .current_dir(&repo_index_path)
-            .args(&["commit", "-m", "(rotterdam): Initializing repo", "--", "config.json"])
+            .args(&["commit", "-m", "(rotterdam): Initializing repo", "--author", "rotterdam <bot@example.com>", "--", "config.json"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -146,7 +147,8 @@ impl App {
         let config = AppConfig {
             repos: config.repos,
             git: AppGitConfig {
-                path: canonical_path
+                author: config.git.author,
+                path: canonical_path,
             }
         };
 
@@ -265,6 +267,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         
         AppConfig {
             git: AppGitConfig {
+                author: String::from("rotterdam <rotterdam@rotterdam.jameselford.com>"),
                 path: git_path,
             },
             repos,
@@ -273,6 +276,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
         AppConfig {
             git: AppGitConfig {
                 path: env::current_dir()?.join("rotterdam-data").join("git"),
+                author: String::from("rotterdam <rotterdam@rotterdam.jameselford.com>"),
             },
             repos: HashMap::new(),
         }

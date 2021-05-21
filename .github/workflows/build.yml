@@ -78,7 +78,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
     - name: Lint
-      run: cargo clippy
-      env:
-        RUSTFLAGS: "-D warnings"
+      run: ci/lint.sh
+        
 

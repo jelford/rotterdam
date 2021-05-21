@@ -1,10 +1,14 @@
-use std::{fs::File, path::{PathBuf}};
 use std::{
     env,
     io::{Read, Write},
     process::{Command, Stdio},
 };
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
+const TEST_REGISTRY_NAME: &'static str = "rotterdam-test-registry";
 
 struct RotterdamServerInstance {
     pub port: u16,
@@ -30,7 +34,10 @@ fn start_server() -> RotterdamServerInstance {
         env::var("ROTTERDAM_BIN").expect("Need to set ROTTERDAM_BIN environment variable"),
     );
 
-    log::info!("Using rotterdam bin from: {}", rotterdam_path.to_string_lossy());
+    log::info!(
+        "Using rotterdam bin from: {}",
+        rotterdam_path.to_string_lossy()
+    );
 
     let working_dir = tempfile::tempdir().expect("Setting up temp directory");
     let workdir_path = PathBuf::from("/tmp/rotterdam-runtime-path"); // working_dir.path();
@@ -102,11 +109,19 @@ fn fetch_admin_token(server: &RotterdamServerInstance) -> String {
 
 fn test_data_path<P: Into<PathBuf>>(rel_path_from_test_folder: P) -> PathBuf {
     let pkg_root = env!("CARGO_MANIFEST_DIR");
-    let pkg_root = PathBuf::from(pkg_root).canonicalize().expect("Canonicalizing package manifest directory");
+    let pkg_root = PathBuf::from(pkg_root)
+        .canonicalize()
+        .expect("Canonicalizing package manifest directory");
     let test_data = pkg_root.join("tests");
     let source_file = test_data.join(rel_path_from_test_folder.into());
-    assert!(source_file.exists(), "Source file to copy does not exist: {}", source_file.to_string_lossy());
-    let source_file = source_file.canonicalize().expect("Canonicalizing source file for copy");
+    assert!(
+        source_file.exists(),
+        "Source file to copy does not exist: {}",
+        source_file.to_string_lossy()
+    );
+    let source_file = source_file
+        .canonicalize()
+        .expect("Canonicalizing source file for copy");
 
     source_file
 }
@@ -118,69 +133,70 @@ fn lib_project_dir() -> (tempfile::TempDir, PathBuf) {
 
     let p = PathBuf::from("/tmp/fixed-test-dir");
     if let Err(e) = std::fs::remove_dir_all(&p) {
-        assert!(!p.exists(), "Unable to delete {}: {}", p.to_string_lossy(), e);
+        assert!(
+            !p.exists(),
+            "Unable to delete {}: {}",
+            p.to_string_lossy(),
+            e
+        );
     }
     std::fs::create_dir(&p).unwrap();
 
     (lib_project_dir, p)
 }
 
-// #[test]
-fn main() {
-    pretty_env_logger::init_timed();
-    
-    let mut server = start_server();
-    let (_tmp, p) = lib_project_dir();
-    
+fn initialize_lib_project(working_directory: &Path, server_port: u16) {
     assert!(Command::new("cargo")
         .arg("init")
         .arg("--lib")
         .arg("--name")
         .arg("test-library")
-        .current_dir(&p)
+        .current_dir(working_directory)
         .spawn()
         .unwrap()
         .wait()
         .unwrap()
         .success());
 
-    std::fs::create_dir(&p.join(".cargo")).expect("creating .cargo for lib project");
-    let mut config = File::create(&p.join(".cargo").join("config.toml"))
-        .expect("creating .cargo/config.toml for lib");
-    write!(
-        config,
-        "\
-        [registries]
-        rotterdam-test-registry = {{ index = \"http://localhost:{}/repo/testrepo/index\" }}",
-        server.port
-    )
-    .unwrap();
-    drop(config);
+    {
+        std::fs::create_dir(working_directory.join(".cargo")).expect("creating .cargo for lib project");
+        let mut config = File::create(working_directory.join(".cargo").join("config.toml"))
+            .expect("creating .cargo/config.toml for lib");
+        write!(
+            config,
+            "\
+            [registries]\n\
+            {} = {{ index = \"http://localhost:{}/repo/testrepo/index\" }}",
+            TEST_REGISTRY_NAME, server_port
+        )
+        .unwrap();
+    }
+
+
     std::fs::copy(
         test_data_path("create-repo/library-Cargo.toml"),
-        &p.join("Cargo.toml"),
+        working_directory.join("Cargo.toml"),
     )
     .unwrap();
 
     assert!(Command::new("cargo")
-        .current_dir(&p)
+        .current_dir(working_directory)
         .arg("build")
         .spawn()
         .unwrap()
         .wait()
         .unwrap()
         .success());
+}
 
-    let token = fetch_admin_token(&server);
-    log::debug!("Token: {}", token);
-
+fn setup_login_credentials(cargo_home: &Path, library_path: &Path, token: &str) {
     let mut login_child = Command::new("cargo")
-        .env("CARGO_HOME", p.as_os_str())
+        .env("CARGO_HOME", cargo_home.as_os_str())
         .env("CARGO_LOG", "debug")
-        .current_dir(&p)
+        .current_dir(library_path)
         .arg("login")
         .arg("--registry")
-        .arg("rotterdam-test-registry")
+        .arg(TEST_REGISTRY_NAME)
         .stdin(Stdio::piped())
         .spawn()
         .unwrap();
@@ -192,14 +208,28 @@ fn main() {
         .write_all(&token.as_bytes())
         .unwrap();
     assert!(login_child.wait().unwrap().success());
+}
 
-    // assert!(Command::new("cargo")
-    //     .env("CARGO_HOME", p.as_os_str())
-    //     .current_dir(&p)
-    //     .arg("publish")
-    //     .spawn()?
-    //     .wait()?
-    //     .success());
+fn publish() {
+    unimplemented!("publish");
+}
+
+// #[test]
+fn main() {
+    pretty_env_logger::init_timed();
+
+    let mut server = start_server();
+
+    let (_tmp, p) = lib_project_dir();
+
+    initialize_lib_project(&p, server.port);
+
+    let token = fetch_admin_token(&server);
+    log::debug!("Token: {}", token);
+
+    setup_login_credentials(&p, &p, &token);
+
+    // publish();
 
     log::info!("Server status: {:?}", server.process.try_wait());
 }

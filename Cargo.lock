@@ -355,6 +355,7 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "smtr",
+ "thiserror",
  "toml",
 ]
 

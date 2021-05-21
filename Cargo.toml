@@ -8,6 +8,7 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 anyhow = "1"
+thiserror = "1"
 smtr = { path = "./smtr" }
 clap = "2"
 libc = "0.2"

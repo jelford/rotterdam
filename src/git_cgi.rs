@@ -1,5 +1,5 @@
 
-use super::AppConfig;
+use super::config::AppConfig;
 use super::{Request, TcpResponseWriter, Response};
 
 use anyhow::{Result, Context, bail};

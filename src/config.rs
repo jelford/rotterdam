@@ -3,7 +3,7 @@ use std::path::{PathBuf, Path};
 use std::borrow::Cow;
 use std::env;
 
-use thiserror;
+
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppConfig {
@@ -29,11 +29,11 @@ pub(crate) enum Error {
     #[error("Unable to find configuration file at {0}")]
     FileNotFound(PathBuf),
     #[error("Unable to read configuration file: {0}")]
-    FileReadError(#[from] std::io::Error),
+    FileRead(#[from] std::io::Error),
     #[error("Configuration file is not valid toml: {0}")]
-    FileFormatSyntaxError(#[from] toml::de::Error),
+    FileFormatSyntax(#[from] toml::de::Error),
     #[error("Invalid configuration: {0}")]
-    InvalidConfiguration(String),
+    InvalidConfiguration(&'static str),
 }
 
 
@@ -55,10 +55,10 @@ pub(crate) fn load<P: Deref<Target=Path>+AsRef<Path>>(path: Option<P>) -> Result
         let config = std::fs::read(config_path)?;
         let toml = toml::from_slice::<toml::Value>(&config)?;
         let git_path = 
-            toml.get("rotterdam").ok_or(Error::InvalidConfiguration("missing configuration key: rotterdam".into()))?
-                .get("git").and_then(|gc| gc.get("filesystem")).and_then(|fs| fs.get("path")).ok_or(Error::InvalidConfiguration("git storage path not specified in config".into()))?
+            toml.get("rotterdam").ok_or(Error::InvalidConfiguration("missing configuration key: rotterdam"))?
+                .get("git").and_then(|gc| gc.get("filesystem")).and_then(|fs| fs.get("path")).ok_or(Error::InvalidConfiguration("git storage path not specified in config"))?
                 .as_str()
-                .ok_or(Error::InvalidConfiguration("git storage path not a valid string".into()))?;
+                .ok_or(Error::InvalidConfiguration("git storage path not a valid string"))?;
         let git_path = PathBuf::from(git_path);
 
         result.git.path = git_path;
@@ -74,13 +74,13 @@ pub(crate) fn load<P: Deref<Target=Path>+AsRef<Path>>(path: Option<P>) -> Result
                 },
                 toml::Value::Array(config_repos) => {
                     for name in config_repos {
-                        let name = name.as_str().ok_or(Error::InvalidConfiguration("rotterdam.repos must contain repository names when specified as an array".into()))?;
+                        let name = name.as_str().ok_or(Error::InvalidConfiguration("rotterdam.repos must contain repository names when specified as an array"))?;
                         let name = Cow::from(name.to_string());
                         repos.insert(name.clone(), Repo { name: name.clone() });
                     }
                 }
                 _ => {
-                    return Err(Error::InvalidConfiguration("rotterdam.repos must be either a table or list of repositories to serve".into()));
+                    return Err(Error::InvalidConfiguration("rotterdam.repos must be either a table or list of repositories to serve"));
                 }
             }
 

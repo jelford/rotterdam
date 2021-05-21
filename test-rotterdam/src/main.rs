@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const TEST_REGISTRY_NAME: &'static str = "rotterdam-test-registry";
+const TEST_REGISTRY_NAME: &str = "rotterdam-test-registry";
 
 struct RotterdamServerInstance {
     pub port: u16,

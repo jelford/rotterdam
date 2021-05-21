@@ -1,9 +1,8 @@
-use std::{env, error::Error, io::{Write, stdout}, os::unix::prelude::AsRawFd, path::{Path, PathBuf}, process::Command, str::FromStr};
-use std::process::{Stdio};
-use anyhow::{Context, Result, anyhow};
+use std::{env, error::Error, io::{Write, stdout}, os::unix::prelude::AsRawFd, path::{PathBuf}};
+
+use anyhow::{Result};
 use smtr::{
-    server::{Response, TcpResponseWriter},
-    Method, Request,
+    server::{Response, TcpResponseWriter}, Request,
 };
 
 mod git_cgi;

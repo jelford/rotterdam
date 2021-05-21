@@ -4,7 +4,7 @@ use super::config;
 use super::Result;
 use super::git_cgi;
 
-use std::{io::{Write}, path::{Path}, process::Command};
+use std::{io::{Write}, process::Command};
 use std::process::{Stdio};
 use anyhow::{Context, bail};
 use smtr::{
